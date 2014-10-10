@@ -1,0 +1,122 @@
+SELECT T2.contributor_name, T2.recipient_name, SUM(T2.amount)/Total.total_by_PAC FROM (SELECT T1.fec_committee_id, SUM(T1.amount) AS total_by_PAC FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' GROUP BY T1.fec_committee_id LIMIT 100) AS Total, fec_committee_contributions T2 WHERE T2.transaction_type = '24K' AND T2.entity_type = 'PAC' GROUP BY T2.fec_committee_id, T2.other_id LIMIT 100;
+
+SELECT T2.contributor_name, T2.recipient_name, SUM(T2.amount), Total.total_by_PAC, SUM(T2.amount)/Total.total_by_PAC FROM (SELECT T1.fec_committee_id, SUM(T1.amount) AS total_by_PAC FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' GROUP BY T1.fec_committee_id LIMIT 100) AS Total, fec_committee_contributions T2 WHERE T2.transaction_type = '24K' AND T2.entity_type = 'PAC' GROUP BY T2.fec_committee_id, T2.other_id LIMIT 100;
+
+SELECT T1.contributor_name, SUM(T1.amount) AS total_by_PAC FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' GROUP BY T1.fec_committee_id LIMIT 100;
+
+SELECT T1.fec_committee_id, T1.contributor_name, T2.other_id, T2.recipient_name, T2.amount/T1.total_by_PAC AS exclusivity_score, T2.report_type FROM (SELECT T.fec_committee_id, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' GROUP BY T.fec_committee_id LIMIT 100) AS T1, fec_committee_contributions T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' GROUP BY T1.fec_committee_id, T2.other_id LIMIT 100;
+
+
+
+
+
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.amount/T1.total_by_PAC AS exclusivity_score 
+FROM (
+
+
+
+
+	SELECT T.fec_committee_id, T.contributor_name, SUM(T.amount) AS total_by_PAC 
+	FROM fec_committee_contributions T 
+	WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' 
+	GROUP BY T.fec_committee_id LIMIT 1000
+
+
+	) AS T1, fec_committee_contributions T2 
+
+
+
+WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' 
+GROUP BY T1.fec_committee_id, T2.other_id LIMIT 100;
+
+--------------
+
+# Query to find maximum amount donated by each PAC. Might want to incorporate transaction_type and break down by race :)
+SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, MAX(T1.amount) AS max_amount FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' GROUP BY T1.fec_committee_id LIMIT 100;
+
+# Query to find maximum amount donated above $5,000:
+SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.date, MAX(T1.amount) AS max_amount FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.other_id NOT IN (SELECT filer_id FROM super_PACs_list) GROUP BY T1.fec_committee_id LIMIT 1000) T WHERE T.max_amount > '5000' ORDER BY T.max_amount DESC;
+
+# get all donations above $5,000
+SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.date, T1.amount FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.other_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.amount > '5000' ORDER BY T1.amount DESC;
+
+#Query to find PACs whose donations went all to a single candidate:
+
+#Strategy: find all pairs with exclusivity_score = 1
+
+SELECT T1.fec_committee_id, T1.contributor_name, T1.amount FROM exclusivity_scores T1 WHERE T1.exclusivity_score = '1';
+SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.amount/T1.total_by_PAC AS exclusivity_score FROM (SELECT T.fec_committee_id, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' GROUP BY T.fec_committee_id LIMIT 1000) AS T1, fec_committee_contributions T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' GROUP BY T1.fec_committee_id, T2.other_id LIMIT 1000) T3 WHERE T3.exclusivity_score = '1'; 
+
+#or compare sum of all PACs donations with maximum amount donated:
+
+SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T2.other_id, T2.recipient_name, T1.total_by_PAC, MAX(T2.amount) AS max_amount FROM (SELECT T.fec_committee_id, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' GROUP BY T.fec_committee_id LIMIT 1000) AS T1, fec_committee_contributions T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' GROUP BY T1.fec_committee_id) T3 WHERE T3.total_by_PAC = T3.max_amount LIMIT 100;
+
+
+
+#Query to find all donations from 2003 on
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, EXTRACT(YEAR FROM T.date) FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' ORDER BY T.date LIMIT 100;
+
+
+#Query to look up specific pair
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date, T.amount FROM fec_committee_contributions T WHERE T.other_id = 'C00544346' AND T.fec_committee_id = 'C00504753' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
+
+SELECT * FROM (SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date, MAX(T.amount) AS max_amount FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id, T.other_id LIMIT 1000) T1 WHERE T1.max_amount > 5000 ORDER BY T1.max_amount DESC;
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date, T.amount FROM fec_committee_contributions T WHERE T.fec_committee_id = 'C00028860' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
+
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date, T.amount FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' AND T.amount > 5000 ORDER BY T.amount DESC LIMIT 1000;
+
+
+SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0) AS periodicity_score FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' GROUP BY T1.fec_committee_id, T1.other_id ORDER BY T1.fec_committee_id, T1.other_id LIMIT 1000) T ORDER BY T.periodicity_score DESC;
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date FROM fec_committee_contributions T WHERE T.other_id = 'C00383232' AND T.fec_committee_id = 'C00004952' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
+
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.state, T.amount, T.date FROM fec_committee_contributions T WHERE T.fec_committee_id = 'C00000422' AND T.other_id = 'C00348607' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
+
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, COUNT(T.state) FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T1.fec_committee_id, T1.other_id;
+
+
+# answering Derek's question - same pairs donating in different cycles, different states
+SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, COUNT(T1.state) FROM (SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.state FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id, T.other_id, T.state) T1 GROUP BY T1.fec_committee_id, T1.other_id ORDER BY COUNT(T1.state) DESC LIMIT 100;
+
+
+SELECT * FROM (SELECT T4.fec_committee_id, T4.contributor_name, T4.other_id, T4.recipient_name, T4.state_count, COUNT(T4.cycle) AS cycle_count FROM (SELECT T2.fec_committee_id, T2.contributor_name, T2.other_id, T2.recipient_name, T2.state_count, T3.cycle FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, COUNT(T1.state) AS state_count FROM (SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.state FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id, T.other_id, T.state) T1 GROUP BY T1.fec_committee_id, T1.other_id ORDER BY COUNT(T1.state)) T2, fec_committee_contributions T3 WHERE T2.other_id = T3.other_id AND T2.fec_committee_id = T3.fec_committee_id AND T2.state_count > 1 ORDER BY T2.fec_committee_id, T2.other_id) T4) T5 WHERE T5.cycle_count > 1;
+
+# geographical query: how many states does a PAC donate to?
+SELECT T1.fec_committee_id, T1.contributor_name, COUNT(T1.state) FROM (SELECT T.fec_committee_id, T.contributor_name, T.state FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id, T.state) T1 GROUP BY T1.fec_committee_id ORDER BY COUNT(T1.state) LIMIT 100;
+
+SELECT T1.fec_committee_id, T1.contributor_name, COUNT(T1.state) FROM (SELECT T.fec_committee_id, T.contributor_name, T.state FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id, T.state) T1 GROUP BY T1.fec_committee_id ORDER BY COUNT(T1.state) DESC LIMIT 100;
+
+
+
+SELECT T.fec_committee_id, T.contributor_name, COUNT(DISTINCT T.state), COUNT(*) FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id, T.state ORDER BY COUNT(DISTINCT T.state) DESC;
+
+# see all report types
+SELECT T.report_type FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.report_type;
+
+# see all PGIs
+SELECT T.report_type, EXTRACT(YEAR FROM T.date) FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' AND T.report_type = 'M11' GROUP BY EXTRACT(YEAR FROM T.date);
+
+
+
+
+
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T2.filer_name, T1.other_id, T1.recipient_name FROM fec_committee_contributions T1, super_PACs_list T2 WHERE T1.fec_committee_id = T2.filer_id AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003'LIMIT 10;
+
+
+SELECT T.fec_candidate_id FROM fec_committees T WHERE fec_candidate_id LIKE '[HPS]%' LIMIT 100;
+
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T2.name as committee_name, T2.fec_candidate_id, T3.fecid as T3_candidate_id, T3.name as candidate_name FROM fec_committee_contributions T1, fec_committees T2, fec_candidates T3 WHERE T3.fec_committee_id = T1.other_id AND T1.other_id = T2.fecid AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.other_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.other_id REGEXP '^[HPS]'; LIMIT 10;
+
