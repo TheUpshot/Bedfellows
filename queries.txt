@@ -74,7 +74,7 @@ SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.d
 
 SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0) AS periodicity_score FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' GROUP BY T1.fec_committee_id, T1.other_id ORDER BY T1.fec_committee_id, T1.other_id LIMIT 1000) T ORDER BY T.periodicity_score DESC;
 
-SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date FROM fec_committee_contributions T WHERE T.other_id = 'C00383232' AND T.fec_committee_id = 'C00004952' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date, T.amount FROM fec_committee_contributions T WHERE T.other_id = 'C00271338' AND T.fec_committee_id = 'C00000422' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
 
 
 SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.state, T.amount, T.date FROM fec_committee_contributions T WHERE T.fec_committee_id = 'C00000422' AND T.other_id = 'C00348607' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
@@ -118,5 +118,131 @@ SELECT T.fec_candidate_id FROM fec_committees T WHERE fec_candidate_id LIKE '[HP
 
 
 
-SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T2.name as committee_name, T2.fec_candidate_id, T3.fecid as T3_candidate_id, T3.name as candidate_name FROM fec_committee_contributions T1, fec_committees T2, fec_candidates T3 WHERE T3.fec_committee_id = T1.other_id AND T1.other_id = T2.fecid AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.other_id NOT IN (SELECT filer_id FROM super_PACs_list) AND T1.other_id REGEXP '^[HPS]'; LIMIT 10;
+# Query that joins fec_committees, fec_candidates and fec_committee_contributions table
+
+# How many races does a PAC support? (Disregard year)
+SELECT T.fec_committee_id, T.contributor_name, COUNT(T.fec_committee_id)
+FROM races_list T
+GROUP BY T.district, T.office_state, T.branch
+ORDER BY NULL;
+
+SELECT *
+FROM (
+
+SELECT T.fec_committee_id, COUNT(*)
+FROM races_list T
+GROUP BY T.fec_committee_id
+ORDER BY NULL
+
+) T1
+ORDER BY T1.count_races;
+
+SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, T.date, T.amount FROM fec_committee_contributions T WHERE T.fec_committee_id = 'C00210187' AND T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003';
++----------
+
+
+
+"SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, 1/COUNT(*) AS race_focus_bonus FROM (SELECT T.fec_committee_id, T.contributor_name, T.district, T.office_state, T.branch FROM races_list T GROUP BY T.fec_committee_id, T.district, T.office_state, T.branch ORDER BY NULL) T1 GROUP BY T1.fec_committee_id ORDER BY NULL) T2 ORDER BY T2.count_races;"
+
+SELECT * FROM fec_committee_contributions T1, fec_committees T2, fec_candidates T3 WHERE T2.fec_candidate_id = T3.fecid AND T1.other_id = T2.fecid AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list) AND T2.fec_candidate_id REGEXP '^[HPS]' LIMIT 10;
+
+
+
+
+
+SELECT T2.committee_type FROM fec_committee_contributions T1, fec_committees T2 WHERE T1.other_id = T2.fecid AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T2.is_super_PAC = '0' GROUP BY T2.committee_type;
+
+SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T2.committee_type FROM fec_committee_contributions T1, fec_committees T2 WHERE T1.other_id = T2.fecid AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T2.is_super_PAC = '0' AND T2.committee_type = 'A' LIMIT 100;
+
+
+
+
+
+
+
+
+SELECT T4.fec_committee_id, T4.contributor_name, T4.total_by_PAC, T4.other_id, T4.recipient_name, T4.amount, T4.date, T4.exclusivity_score 
+FROM (
+	SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T3.is_super_PAC, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_score 
+	FROM total_donated_by_PAC T1, fec_committee_contributions T2, fec_committees T3 
+	WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' AND EXTRACT(YEAR FROM T2.date) >= '2003' AND T2.other_id = T3.fecid AND T3.is_super_PAC = '0' 
+	) T4, fec_committees T5 
+WHERE T4.fec_committee_id = T5.fecid AND T5.is_super_PAC = '0';
+
+
+
+GROUP BY T1.fec_committee_id, T2.other_id 
+	ORDER BY NULL
+
+-----
+total_donated_by_PAC T1
+
+-----
+
+	SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_score FROM (SELECT T.fec_committee_id, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id ORDER BY NULL) AS T1, fec_committee_contributions T2, fec_committees T3 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' AND EXTRACT(YEAR FROM T2.date) >= '2003' AND T2.other_id = T3.fecid AND T3.is_super_PAC = '0' GROUP BY T1.fec_committee_id, T2.other_id ORDER BY NULL LIMIT 100;
+
+
+
+
+	"SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, SUM(T.amount) AS total_amount, SUM(exclusivity_subscore) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_committee_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' AND EXTRACT(YEAR FROM T2.date) >= '2003' AND T2.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T3) AND T2.other_id NOT IN (SELECT fecid FROM super_PACs_list T4)) T GROUP BY T.fec_committee_id, T.other_id ORDER BY NULL;"
+	
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T2.cycle, CASE T2.committee_type WHEN 'X' OR 'Y' THEN CASE T1.fec_committee_id WHEN 'C00003418' OR 'C00163022' OR 'C00027466' OR 'C00075820' OR 'C00000935' OR 'C00042366' OR 'C00010603' THEN 'national_party' ELSE 'other_party' END ELSE CASE WHEN (T2.cycle >= EXTRACT(YEAR FROM T2.multiqualify_date)) THEN 'multi_pac'ELSE 'non_multi_pac' END END AS contributor_type FROM fec_committees T2, fec_committee_contributions T1 WHERE T1.fec_committee_id = T2.fecid AND (T2.committee_type = 'X' OR T2.committee_type = 'Y' OR T2.committee_type = 'N' OR T2.committee_type = 'Q' OR T2.committee_type = 'F') GROUP BY T1.fec_committee_id ORDER BY NULL
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T2.cycle, CASE T2.committee_type WHEN 'X' OR 'Y' THEN CASE T1.fec_committee_id WHEN 'C00003418' OR 'C00163022' OR 'C00027466' OR 'C00075820' OR 'C00000935' OR 'C00042366' OR 'C00010603' THEN 'national_party' ELSE 'other_party' END ELSE CASE WHEN (T2.cycle >= EXTRACT(YEAR FROM T2.multiqualify_date)) THEN 'multi_pac'ELSE 'non_multi_pac' END END AS contributor_type FROM fec_committees T2 JOIN fec_committee_contributions T1 ON T1.fec_committee_id = T2.fecid USE INDEX(fecid_3) WHERE T2.committee_type = 'X' OR T2.committee_type = 'Y' OR T2.committee_type = 'N' OR T2.committee_type = 'Q' OR T2.committee_type = 'F' GROUP BY T1.fec_committee_id ORDER BY NULL
+
+
+
+
+SELECT T.fecid, T.name, T.cycle, CASE WHEN (T.committee_type = 'X' OR T.committee_type = 'Y') THEN CASE WHEN (T.fecid = 'C00003418' OR T.fecid = 'C00163022' OR T.fecid = 'C00027466' OR T.fecid = 'C00075820' OR T.fecid = 'C00000935' OR T.fecid = 'C00042366' OR T.fecid = 'C00010603') THEN 'national_party' ELSE 'other_party' END ELSE CASE WHEN (T.committee_type = 'H' OR T.committee_type = 'S' OR T.committee_type = 'P' OR T.committee_type = 'A' OR T.committee_type = 'B') THEN 'candidate' ELSE 'pac' END END AS contributor_type FROM fec_committees T WHERE T.committee_type = 'X' OR T.committee_type = 'Y' OR T.committee_type = 'H' OR T.committee_type = 'S' OR T.committee_type = 'P' OR T.committee_type = 'A' OR T.committee_type = 'B' OR T.committee_type = 'N' OR T.committee_type = 'Q' OR T.committee_type = 'F' OR T.committee_type = 'G' GROUP BY T.fecid, T.cycle ORDER BY NULL;
+
+
+
+
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T2.contributor_type, T1.other_id, T1.recipient_name, T3.recipient_type, T1.cycle, T1.date, T1.amount, T4.contribution_limit, T1.amount/T4.contribution_limit AS maxed_out_score FROM fec_committee_contributions T1, contributor_types T2, recipient_types T3, contribution_limits T4 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T3.other_id AND T2.contributor_type = T4.contributor_type AND T3.recipient_type = T4.recipient_type AND T1.cycle = T4.cycle AND T2.cycle = T4.cycle AND T3.cycle = T4.cycle GROUP BY T1.fec_committee_id, T1.other_id, T1.date, T1.amount ORDER BY NULL;
+
+
+
+
+
+
+
+
+SELECT T1.fec_committee_id, T1.contributor_name, T2.contributor_type, T1.other_id, T1.recipient_name, T3.recipient_type, T1.cycle, T1.date, T1.amount FROM fec_committee_contributions T1, contributor_types T2, recipient_types T3 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T3.other_id GROUP BY T1.fec_committee_id, T1.other_id, T1.date, T1.amount ORDER BY NULL;
+
+
+
+
+
+SELECT DISTINCT T1.fec_committee_id, T1.contributor_name, T2.contributor_type, T1.other_id, T1.recipient_name, T3.recipient_type, T1.cycle, T1.date, T1.amount FROM fec_committee_contributions T1, contributor_types T2, recipient_types T3 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T3.other_id LIMIT 10;
+
+
+
+ALTER TABLE contribution_limits ADD INDEX (contributor_type, recipient_type, cycle, contribution_limit);
+
+
+
+
+
+
+
+C00003418 | REPUBLICAN NATIONAL COMMITTEE 
+C00163022 | REPUBLICAN NATIONAL COMMITTEE 
+
+C00027466 | NATIONAL REPUBLICAN SENATORIAL COMMITTEE
+
+C00075820 | NATIONAL REPUBLICAN CONGRESSIONAL COMMITTEE
+
+
+-----
+
+C00000935 | DEMOCRATIC CONGRESSIONAL CAMPAIGN COMMITTEE
+
+C00042366 | DEMOCRATIC SENATORIAL CAMPAIGN COMMITTEE
+
+C00010603 | DNC SERVICES CORPORATION/DEMOCRATIC NATIONAL COMMITTEE
 
