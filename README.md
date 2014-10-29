@@ -1,4 +1,9 @@
 PAC_affinity_scores
 ===================
 
-Relationship score for PAC and Committee pairs
+Usage:
+		python main.py <Name of Database>
+
+Example:
+		python main.py fec
+	
