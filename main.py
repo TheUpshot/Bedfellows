@@ -1,8 +1,7 @@
 import MySQLdb, sys, csv
 from sys import stdout
 
-def main(database):
-	db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=database) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
+def main():
 	cursor = db.cursor()
 
 	initial_setup(cursor)
@@ -70,10 +69,9 @@ def compute_exclusivity_score(cursor):
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
 				amount CHAR(10),
-				donation_date DATE,
 				exclusivity_score FLOAT(10));"""
 	sql3 = "LOCK TABLES exclusivity_scores WRITE, total_donated_by_PAC AS T1 READ, fec_committee_contributions AS T2 READ, super_PACs_list T3 READ, super_PACs_list T4 READ;"
-	sql4 = "INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, amount, donation_date, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, SUM(T.amount) AS total_amount, SUM(exclusivity_subscore) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_committee_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' AND EXTRACT(YEAR FROM T2.date) >= '2003' AND T2.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T3) AND T2.other_id NOT IN (SELECT fecid FROM super_PACs_list T4)) T GROUP BY T.fec_committee_id, T.other_id ORDER BY NULL;"
+	sql4 = "INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, amount, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, SUM(T.amount) AS total_amount, SUM(exclusivity_subscore) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_committee_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' AND EXTRACT(YEAR FROM T2.date) >= '2003' AND T2.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T3) AND T2.other_id NOT IN (SELECT fecid FROM super_PACs_list T4)) T GROUP BY T.fec_committee_id, T.other_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
    	sql6 = "ALTER TABLE exclusivity_scores ADD INDEX (fec_committee_id, other_id);"
    	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
@@ -392,7 +390,8 @@ def usage():
 
 if __name__ == "__main__":
 	if len(sys.argv) == 2:
-		main(sys.argv[1])
+		db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=sys.argv[1]) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
+		main()
 	else:
 		usage()
 		sys.exit(1)
