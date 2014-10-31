@@ -4,13 +4,13 @@ from sys import stdout
 def main():
 	cursor = db.cursor()
 
-	#initial_setup(cursor)
-	#create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
+	initial_setup(cursor)
+	create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
 	compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
-	#compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
-	#compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
-	#compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
-	#compute_race_focus_scores(cursor)						# 5th score 		# bumps up scores according to geographical proximity
+	compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
+	compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
+	compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
+	compute_race_focus_scores(cursor)						# 5th score 		# bumps up scores according to geographical proximity
 	compute_final_scores(cursor)							# Sum of scores 	# computes weighted sum of all scores
 	db.close()
 
@@ -86,20 +86,21 @@ def compute_report_type_scores(cursor):
 	try:
 		cursor.execute("DROP TABLE IF EXISTS report_type_weights;")
 		cursor.execute( """ CREATE TABLE report_type_weights (
-				report_type CHAR(4) NOT NULL,
+				report_type CHAR(5) NOT NULL,
 				year_parity CHAR(5),
 				weight INT(2));""")
 		cursor.execute("LOCK TABLES report_type_weights WRITE;")
 		db.commit()
 	except MySQLdb.Error, e:
    		handle_error(e)
-	for r in rows:
-		sql = "INSERT INTO report_type_weights (report_type, year_parity, weight) VALUES ('%s','%s','%s')" % (r[0], r[1], r[2])
-		try:
-   			cursor.execute(sql)
-   			db.commit()
-		except MySQLdb.Error, e:
-   			handle_error(e)
+	for index, r in enumerate(rows):
+		if index != 0:
+			sql = "INSERT INTO report_type_weights (report_type, year_parity, weight) VALUES ('%s','%s','%s')" % (r[0], r[1], r[2])
+			try:
+   				cursor.execute(sql)
+   				db.commit()
+			except MySQLdb.Error, e:
+   				handle_error(e)
    	cursor.execute("UNLOCK TABLES;")
    	try:
    		cursor.execute("ALTER TABLE report_type_weights ADD INDEX (report_type, year_parity);")
@@ -161,53 +162,17 @@ def compute_report_type_scores(cursor):
 
 	# For each pair and report type, computes report type subscore as frequency of subscore for the pair times weight associated with report type. Overall score is simply sum of all subscores associated with a pair.
 	sql1 = "DROP TABLE IF EXISTS unnormalized_report_type_scores;"
-	try:
-   		cursor.execute(sql1)
-   		db.commit()
-   		print "sql1 worked"
-	except MySQLdb.Error, e:
-   		handle_error(e)
 	sql2 = """ CREATE TABLE unnormalized_report_type_scores (
 				fec_committee_id CHAR(9) NOT NULL,
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
 				report_type_score FLOAT(10));"""
-	try:
-   		cursor.execute(sql2)
-   		db.commit()
-   		print "sql2 worked"
-	except MySQLdb.Error, e:
-   		handle_error(e)
 	sql3 = "LOCK TABLES unnormalized_report_type_scores WRITE, report_type_weights AS T1 READ, report_type_frequency AS T2 READ;"
-	try:
-   		cursor.execute(sql3)
-   		db.commit()
-   		print "sql3 worked"
-	except MySQLdb.Error, e:
-   		handle_error(e)
 	sql4 = "INSERT INTO unnormalized_report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, report_type_score) SELECT T3.fec_committee_id, T3.contributor_name, T3.other_id, T3.recipient_name, SUM(T3.report_type_subscore) AS report_type_score FROM (SELECT T2.fec_committee_id, T2.contributor_name, T2.other_id, T2.recipient_name, T1.report_type, T1.year_parity, T2.d_date, T2.report_type_frequency, T1.weight, T2.report_type_frequency * T1.weight AS report_type_subscore FROM report_type_weights T1, report_type_frequency T2 WHERE T1.report_type = T2.report_type AND T1.year_parity = T2.year_parity) T3 GROUP BY T3.fec_committee_id, T3.other_id ORDER BY NULL;"
-	try:
-   		cursor.execute(sql4)
-   		db.commit()
-   		print "sql4 worked"
-	except MySQLdb.Error, e:
-   		handle_error(e)
 	sql5 = "UNLOCK TABLES;"
-	try:
-   		cursor.execute(sql5)
-   		db.commit()
-   		print "sql5 worked"
-	except MySQLdb.Error, e:
-   		handle_error(e)
 	sql6 = "ALTER TABLE unnormalized_report_type_scores ADD INDEX (report_type_score);" 
-	try:
-   		cursor.execute(sql6)
-   		db.commit()
-   		print "sql6 worked"
-	except MySQLdb.Error, e:
-   		handle_error(e)
-	#commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table unnormalized_report_type_scores"
 
 	# Finds maximum score in unnormalized_report_type_scores table.
@@ -377,7 +342,7 @@ def compute_maxed_out_scores(cursor):
 	sql4 = "INSERT INTO joined_contr_recpt_types (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, recipient_type, cycle, date, amount) SELECT T1.fec_committee_id, T1.contributor_name, T2.contributor_type, T1.other_id, T1.recipient_name, T3.recipient_type, T1.cycle, T1.date, T1.amount FROM fec_committee_contributions T1, contributor_types T2, recipient_types T3 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T3.other_id AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T4) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list T5) GROUP BY T1.fec_committee_id, T1.other_id, T1.date, T1.amount ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
 	sql6 = "ALTER TABLE joined_contr_recpt_types ADD INDEX (contributor_type, recipient_type, cycle);"
-	#commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table joined_contr_recpt_types"
 
 	# Associates each contributor/recipient pair with a contribution limit based on info from the contribution_limits table and computes maxed out subscore as quotient of amount donated over contribution limit.
