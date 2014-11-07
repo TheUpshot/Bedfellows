@@ -4,14 +4,14 @@ from sys import stdout
 def main():
 	cursor = db.cursor()
 
-	#initial_setup(cursor)
-	#create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
-	#compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
-	#compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
+	initial_setup(cursor)
+	create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
+	compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
+	compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
 	compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
-	#compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
+	compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
 	compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
-	#compute_race_focus_scores(cursor)						# 6th score 		# bumps up scores according to geographical proximity
+	compute_race_focus_scores(cursor)						# 6th score 		# bumps up scores according to geographical proximity
 	compute_final_scores(cursor)							# Sum of scores 	# computes weighted sum of all scores
 	db.close()
 
@@ -219,9 +219,6 @@ def compute_periodicity_scores(cursor):
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table unnormalized_periodicity_scores"
 
-	########## Needs to fix periodicity scores. If in the unnormalized table, periodicity_score = 0 but length_score > 0, then check diff between years and diff between days. if days diff is negligible (0, 1 or 2?) and years diff > 0, then assign score of one.
-	# Ask derek, what periodicity score to assign to a pair that sees only two donations  and these are made in consecutive days (e.g. 2006-01-01 and 2006-01-02)
-
 	# Finds maximum score in unnormalized_periodicity_scores table.
 	sql1 = "DROP TABLE IF EXISTS max_periodicity_score;"
 	sql2 = """ CREATE TABLE max_periodicity_score (
@@ -416,6 +413,7 @@ def compute_maxed_out_scores(cursor):
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table maxed_out_scores"
 
+
 def compute_length_scores(cursor):
     # Computes unnormalized length score for a given contributor/recipient pairs as number of days since first and last donation associated with pair.
 	sql1 = "DROP TABLE IF EXISTS unnormalized_length_scores;"
@@ -567,6 +565,7 @@ def compute_final_scores(cursor):
 	sql6 = "ALTER TABLE final_scores ADD INDEX (fec_committee_id, other_id);"
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table final_scores"
+
 
 def commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6):
 	try:
