@@ -4,13 +4,14 @@ from sys import stdout
 def main():
 	cursor = db.cursor()
 
-	initial_setup(cursor)
-	create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
-	compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
-	compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
-	compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
-	compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
-	compute_race_focus_scores(cursor)						# 5th score 		# bumps up scores according to geographical proximity
+	#initial_setup(cursor)
+	#create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
+	#compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
+	#compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
+	#compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
+	#compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
+	compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
+	#compute_race_focus_scores(cursor)						# 6th score 		# bumps up scores according to geographical proximity
 	compute_final_scores(cursor)							# Sum of scores 	# computes weighted sum of all scores
 	db.close()
 
@@ -50,7 +51,7 @@ def compute_exclusivity_scores(cursor):
 	sql2 =  """ CREATE TABLE total_donated_by_PAC (
 				fec_committee_id CHAR(9) NOT NULL,
 				contributor_name CHAR(200),
-				total_by_PAC FLOAT(10));"""
+				total_by_PAC FLOAT(20));"""
 	sql3 = "LOCK TABLES total_donated_by_PAC WRITE, fec_committee_contributions AS T READ;"
 	sql4 = "INSERT INTO total_donated_by_PAC (fec_committee_id, contributor_name, total_by_PAC) SELECT T.fec_committee_id, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' GROUP BY T.fec_committee_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"	
@@ -69,7 +70,7 @@ def compute_exclusivity_scores(cursor):
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
 				amount CHAR(10),
-				exclusivity_score FLOAT(10));"""
+				exclusivity_score FLOAT(20));"""
 	sql3 = "LOCK TABLES exclusivity_scores WRITE, total_donated_by_PAC AS T1 READ, fec_committee_contributions AS T2 READ, super_PACs_list T3 READ, super_PACs_list T4 READ;"
 	sql4 = "INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, amount, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, SUM(T.amount) AS total_amount, IF(SUM(exclusivity_subscore) > 1, 1, SUM(exclusivity_subscore)) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_committee_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T2.transaction_type = '24K' AND T2.entity_type = 'PAC' AND EXTRACT(YEAR FROM T2.date) >= '2003' AND T2.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T3) AND T2.other_id NOT IN (SELECT fecid FROM super_PACs_list T4)) T GROUP BY T.fec_committee_id, T.other_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
@@ -127,14 +128,14 @@ def compute_report_type_scores(cursor):
    	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
  	print "Table report_type_count_by_pair"
 
- 	# Then, counts how many times each contributor/recipient occurs in database (i.e. how many times contributor donated to recipient.) Join with exclusivity_scores is to make sure we only look at donations associated with transaction type, entity type, date and superPAC constraints.
+ 	# Then, counts how many times each contributor/recipient pair occurs in database (i.e. how many times contributor donated to recipient.) 
 	sql1 = "DROP TABLE IF EXISTS pairs_count;"
 	sql2 = """ CREATE TABLE pairs_count (
 				fec_committee_id CHAR(9) NOT NULL,
 				other_id CHAR(9) NOT NULL,
 				count INT(10));"""
-	sql3 = "LOCK TABLES pairs_count WRITE, exclusivity_scores AS T1 READ, fec_committee_contributions AS T2 READ;"
-	sql4 = "INSERT INTO pairs_count (fec_committee_id, other_id, count) SELECT T1.fec_committee_id, T2.other_id, count(*) FROM exclusivity_scores T1, fec_committee_contributions T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;"
+	sql3 = "LOCK TABLES pairs_count WRITE, fec_committee_contributions AS T READ, super_PACs_list AS T1 READ, super_PACs_list AS T2 READ;"
+	sql4 = "INSERT INTO pairs_count (fec_committee_id, other_id, count) SELECT T.fec_committee_id, T.other_id, count(*) FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' AND T.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T1) AND T.other_id NOT IN (SELECT fecid FROM super_PACs_list T2) GROUP BY T.fec_committee_id, T.other_id ORDER BY NULL;" 
 	sql5 = "UNLOCK TABLES;"
 	sql6 = "ALTER TABLE pairs_count ADD INDEX (fec_committee_id, other_id);"
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
@@ -152,7 +153,7 @@ def compute_report_type_scores(cursor):
 				d_date DATE, 
 				report_type_count_by_pair CHAR(10),
 				pairs_count INT(10),
-				report_type_frequency FLOAT(10));"""
+				report_type_frequency FLOAT(20));"""
 	sql3 = "LOCK TABLES report_type_frequency WRITE, report_type_count_by_pair AS T1 READ, pairs_count AS T2 READ;"
 	sql4 = "INSERT INTO report_type_frequency (fec_committee_id, contributor_name, other_id, recipient_name, report_type, year_parity, d_date, report_type_count_by_pair, pairs_count, report_type_frequency) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.report_type, T1.year_parity, T1.d_date, T1.count AS report_type_count_by_pair, T2.count AS pairs_count, T1.count/T2.count AS report_type_frequency FROM report_type_count_by_pair T1, pairs_count T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id;"
 	sql5 = "UNLOCK TABLES;"
@@ -167,7 +168,7 @@ def compute_report_type_scores(cursor):
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
-				report_type_score FLOAT(10));"""
+				report_type_score FLOAT(20));"""
 	sql3 = "LOCK TABLES unnormalized_report_type_scores WRITE, report_type_weights AS T1 READ, report_type_frequency AS T2 READ;"
 	sql4 = "INSERT INTO unnormalized_report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, report_type_score) SELECT T3.fec_committee_id, T3.contributor_name, T3.other_id, T3.recipient_name, SUM(T3.report_type_subscore) AS report_type_score FROM (SELECT T2.fec_committee_id, T2.contributor_name, T2.other_id, T2.recipient_name, T1.report_type, T1.year_parity, T2.d_date, T2.report_type_frequency, T1.weight, T2.report_type_frequency * T1.weight AS report_type_subscore FROM report_type_weights T1, report_type_frequency T2 WHERE T1.report_type = T2.report_type AND T1.year_parity = T2.year_parity) T3 GROUP BY T3.fec_committee_id, T3.other_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
@@ -178,7 +179,7 @@ def compute_report_type_scores(cursor):
 	# Finds maximum score in unnormalized_report_type_scores table.
 	sql1 = "DROP TABLE IF EXISTS max_report_type_score;"
 	sql2 = """ CREATE TABLE max_report_type_score (
-				max_report_type_score FLOAT(10));"""
+				max_report_type_score FLOAT(20));"""
 	sql3 = "LOCK TABLES max_report_type_score WRITE, unnormalized_report_type_scores AS T READ;"
 	sql4 = "INSERT INTO max_report_type_score (max_report_type_score) SELECT MAX(report_type_score) AS max_report_type_score FROM unnormalized_report_type_scores T;"
 	sql5 = "UNLOCK TABLES;"
@@ -193,7 +194,7 @@ def compute_report_type_scores(cursor):
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
-				report_type_score FLOAT(10));"""
+				report_type_score FLOAT(20));"""
 	sql3 = "LOCK TABLES report_type_scores WRITE, unnormalized_report_type_scores AS T1 READ, max_report_type_score AS T2 READ;"
 	sql4 = "INSERT INTO report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, report_type_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.report_type_score/T2.max_report_type_score AS report_type_score FROM unnormalized_report_type_scores T1, max_report_type_score T2;"
 	sql5 = "UNLOCK TABLES;"
@@ -209,7 +210,7 @@ def compute_periodicity_scores(cursor):
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
-				periodicity_score FLOAT(10));"""
+				periodicity_score FLOAT(20));"""
 	sql3 = "LOCK TABLES unnormalized_periodicity_scores WRITE, super_PACs_list AS T2 READ, super_PACs_list AS T3 READ, fec_committee_contributions AS T1 READ;"
 	sql4 = "INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0) AS periodicity_score FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T2) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list T3) GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
@@ -217,10 +218,13 @@ def compute_periodicity_scores(cursor):
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table unnormalized_periodicity_scores"
 
+	########## Needs to fix periodicity scores. If in the unnormalized table, periodicity_score = 0 but length_score > 0, then check diff between years and diff between days. if days diff is negligible (0, 1 or 2?) and years diff > 0, then assign score of one.
+	# Ask derek, what periodicity score to assign to a pair that sees only two donations  and these are made in consecutive days (e.g. 2006-01-01 and 2006-01-02)
+
 	# Finds maximum score in unnormalized_periodicity_scores table.
 	sql1 = "DROP TABLE IF EXISTS max_periodicity_score;"
 	sql2 = """ CREATE TABLE max_periodicity_score (
-				max_periodicity_score FLOAT(10));"""
+				max_periodicity_score FLOAT(20));"""
 	sql3 = "LOCK TABLES max_periodicity_score WRITE, unnormalized_periodicity_scores AS T READ;"
 	sql4 = "INSERT INTO max_periodicity_score (max_periodicity_score) SELECT MAX(periodicity_score) AS max_periodicity_score FROM unnormalized_periodicity_scores T;"
 	sql5 = "UNLOCK TABLES;"
@@ -235,7 +239,7 @@ def compute_periodicity_scores(cursor):
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
-				periodicity_score FLOAT(10));"""
+				periodicity_score FLOAT(20));"""
 	sql3 = "LOCK TABLES periodicity_scores WRITE, unnormalized_periodicity_scores AS T1 READ, max_periodicity_score AS T2 READ;"
 	sql4 = "INSERT INTO periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.periodicity_score/T2.max_periodicity_score AS periodicity_score FROM unnormalized_periodicity_scores T1, max_periodicity_score T2;"
 	sql5 = "UNLOCK TABLES;"
@@ -284,7 +288,7 @@ def compute_maxed_out_scores(cursor):
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table recipient_types"
 
-	# Reads file limits.csv into database. File contains contribution limits for all combinations of contributor/recipient types
+	# Reads file limits.csv into database. File contains contribution limits for all combinations of contributor/recipient types.
 	filename = "limits.csv"
 	with open(filename, 'rU') as f:
 		rows = list(csv.reader(f))
@@ -337,7 +341,7 @@ def compute_maxed_out_scores(cursor):
 				recipient_type CHAR(15),
 				cycle CHAR(5),
 				date DATE,
-				amount FLOAT(10));"""
+				amount FLOAT(20));"""
 	sql3 = "LOCK TABLES joined_contr_recpt_types WRITE, fec_committee_contributions AS T1 READ, contributor_types AS T2 READ, recipient_types AS T3 READ, super_PACs_list AS T4 READ, super_PACs_list AS T5 READ;"
 	sql4 = "INSERT INTO joined_contr_recpt_types (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, recipient_type, cycle, date, amount) SELECT T1.fec_committee_id, T1.contributor_name, T2.contributor_type, T1.other_id, T1.recipient_name, T3.recipient_type, T1.cycle, T1.date, T1.amount FROM fec_committee_contributions T1, contributor_types T2, recipient_types T3 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T3.other_id AND T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T4) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list T5) GROUP BY T1.fec_committee_id, T1.other_id, T1.date, T1.amount ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
@@ -356,9 +360,9 @@ def compute_maxed_out_scores(cursor):
 				recipient_type CHAR(15),
 				cycle CHAR(5),
 				date DATE,
-				amount FLOAT(10),
+				amount FLOAT(20),
 				contribution_limit FLOAT(8),
-				maxed_out_subscore FLOAT(10));"""
+				maxed_out_subscore FLOAT(20));"""
 	sql3 = "LOCK TABLES maxed_out_subscores WRITE, joined_contr_recpt_types AS T1 READ, contribution_limits AS T2 READ;"
 	sql4 = "INSERT INTO maxed_out_subscores (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, recipient_type, cycle, date, amount, contribution_limit, maxed_out_subscore) SELECT DISTINCT T1.fec_committee_id, T1.contributor_name, T1.contributor_type, T1.other_id, T1.recipient_name, T1.recipient_type, T1.cycle, T1.date, T1.amount, T2.contribution_limit, T1.amount/T2.contribution_limit AS maxed_out_subscore FROM joined_contr_recpt_types T1, contribution_limits T2 WHERE T1.contributor_type = T2.contributor_type AND T1.recipient_type = T2.recipient_type AND T1.cycle = T2.cycle;"
 	sql5 = "UNLOCK TABLES;"
@@ -375,7 +379,7 @@ def compute_maxed_out_scores(cursor):
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
 				recipient_type CHAR(15),
-				maxed_out_score FLOAT(10));"""
+				maxed_out_score FLOAT(20));"""
 	sql3 = "LOCK TABLES unnormalized_maxed_out_scores WRITE, maxed_out_subscores AS T1 READ;"
 	sql4 = "INSERT INTO unnormalized_maxed_out_scores (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, recipient_type, maxed_out_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.contributor_type, T1.other_id, T1.recipient_name, T1.recipient_type, SUM(T1.maxed_out_subscore) AS maxed_out_score FROM maxed_out_subscores T1 GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
@@ -386,7 +390,7 @@ def compute_maxed_out_scores(cursor):
 	# Finds maximum score in unnormalized_maxed_out_scores table.
 	sql1 = "DROP TABLE IF EXISTS max_maxed_out_score;"
 	sql2 = """ CREATE TABLE max_maxed_out_score (
-				max_maxed_out_score FLOAT(10));"""
+				max_maxed_out_score FLOAT(20));"""
 	sql3 = "LOCK TABLES max_maxed_out_score WRITE, unnormalized_maxed_out_scores AS T READ;"
 	sql4 = "INSERT INTO max_maxed_out_score (max_maxed_out_score) SELECT MAX(maxed_out_score) AS max_maxed_out_score FROM unnormalized_maxed_out_scores T;"
 	sql5 = "UNLOCK TABLES;"
@@ -403,13 +407,59 @@ def compute_maxed_out_scores(cursor):
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
 				recipient_type CHAR(15),
-				maxed_out_score FLOAT(10));"""
+				maxed_out_score FLOAT(20));"""
 	sql3 = "LOCK TABLES maxed_out_scores WRITE, unnormalized_maxed_out_scores AS T1 READ, max_maxed_out_score AS T2 READ;"
 	sql4 = "INSERT INTO maxed_out_scores (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, recipient_type, maxed_out_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.contributor_type, T1.other_id, T1.recipient_name, T1.recipient_type, T1.maxed_out_score/T2.max_maxed_out_score AS maxed_out_score FROM unnormalized_maxed_out_scores T1, max_maxed_out_score T2;"
 	sql5 = "UNLOCK TABLES;"
 	sql6 = "ALTER TABLE maxed_out_scores ADD INDEX (fec_committee_id, other_id);"
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
 	print "Table maxed_out_scores"
+
+def compute_length_scores(cursor):
+    # Computes unnormalized length score for a given contributor/recipient pairs as number of days since first and last donation associated with pair.
+	sql1 = "DROP TABLE IF EXISTS unnormalized_length_scores;"
+	sql2 = """ CREATE TABLE unnormalized_length_scores (
+				fec_committee_id CHAR(9) NOT NULL,
+				contributor_name CHAR(200),
+				other_id CHAR(9) NOT NULL,
+				recipient_name CHAR(200),
+				max_date DATE,
+				min_date DATE,
+				length_score FLOAT(20));"""
+	sql3 = "LOCK TABLES unnormalized_length_scores WRITE, fec_committee_contributions AS T READ, super_PACs_list AS T1 READ, super_PACs_list AS T2 READ;"
+	sql4 = "INSERT INTO unnormalized_length_scores (fec_committee_id, contributor_name, other_id, recipient_name, max_date, min_date, length_score) SELECT T.fec_committee_id, T.contributor_name, T.other_id, T.recipient_name, MAX(T.date) AS max_date, MIN(T.date) AS min_date, DATEDIFF(MAX(T.date), MIN(T.date)) AS length_score FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' AND T.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T1) AND T.other_id NOT IN (SELECT fecid FROM super_PACs_list T2) GROUP BY T.fec_committee_id, T.other_id ORDER BY NULL; " 
+	sql5 = "UNLOCK TABLES;"
+	sql6 = "ALTER TABLE unnormalized_length_scores ADD INDEX (fec_committee_id, other_id);"
+	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+	print "Table unnormalized_length_scores"
+
+	# Finds maximum score in unnormalized_length_scores table.
+	sql1 = "DROP TABLE IF EXISTS max_length_score;"
+	sql2 = """ CREATE TABLE max_length_score (
+				max_length_score FLOAT(20));"""
+	sql3 = "LOCK TABLES max_length_score WRITE, unnormalized_length_scores AS T READ;"
+	sql4 = "INSERT INTO max_length_score (max_length_score) SELECT MAX(length_score) AS max_length_score FROM unnormalized_length_scores T;"
+	sql5 = "UNLOCK TABLES;"
+	sql6 = "" 
+	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+	print "Table max_length_score"
+
+	# Finally, finds final scores by normalizing scores in table unnormalized_maxed_out_scores. Normalization is done by simply dividing all scores by maximum score stored in max_maxed_out_score table, so as to ensure scores fall in a scale from 0 to 1.
+	sql1 = "DROP TABLE IF EXISTS length_scores;"
+	sql2 = """ CREATE TABLE length_scores (
+				fec_committee_id CHAR(9) NOT NULL,
+				contributor_name CHAR(200),
+				other_id CHAR(9) NOT NULL,
+				recipient_name CHAR(200),
+				max_date DATE,
+				min_date DATE,
+				length_score FLOAT(20));"""
+	sql3 = "LOCK TABLES length_scores WRITE, unnormalized_length_scores AS T1 READ, max_length_score AS T2 READ;"
+	sql4 = "INSERT INTO length_scores (fec_committee_id, contributor_name, other_id, recipient_name, max_date, min_date, length_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.max_date, T1.min_date, T1.length_score/T2.max_length_score AS length_score FROM unnormalized_length_scores T1, max_length_score T2;"
+	sql5 = "UNLOCK TABLES;"
+	sql6 = "ALTER TABLE length_scores ADD INDEX (fec_committee_id, other_id);"
+	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+	print "Table length_scores"
 
 
 def compute_race_focus_scores(cursor):
@@ -439,9 +489,10 @@ def compute_race_focus_scores(cursor):
 	sql2 = """ CREATE TABLE race_focus_scores (
 				fec_committee_id CHAR(9) NOT NULL,
 				contributor_name CHAR(200),
-				race_focus_score FLOAT(10));"""
+				race_focus_score FLOAT(20));"""
 	sql3 = "LOCK TABLES race_focus_scores WRITE, races_list AS T READ;"
-	sql4 = "INSERT INTO race_focus_scores (fec_committee_id, contributor_name, race_focus_score) SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, 1/COUNT(*) AS race_focus_score FROM (SELECT T.fec_committee_id, T.contributor_name, T.district, T.office_state, T.branch FROM races_list T GROUP BY T.fec_committee_id, T.district, T.office_state, T.branch ORDER BY NULL) T1 GROUP BY T1.fec_committee_id ORDER BY NULL) T2 ORDER BY T2.race_focus_score DESC;"
+	#sql4 = "INSERT INTO race_focus_scores (fec_committee_id, contributor_name, race_focus_score) SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, 1/COUNT(*) AS race_focus_score FROM (SELECT T.fec_committee_id, T.contributor_name, T.district, T.office_state, T.branch FROM races_list T GROUP BY T.fec_committee_id, T.district, T.office_state, T.branch ORDER BY NULL) T1 GROUP BY T1.fec_committee_id ORDER BY NULL) T2 ORDER BY T2.race_focus_score DESC;"
+	sql4 = "INSERT INTO race_focus_scores (fec_committee_id, contributor_name, race_focus_score) SELECT T1.fec_committee_id, T1.contributor_name, 1/COUNT(*) AS race_focus_score FROM (SELECT T.fec_committee_id, T.contributor_name, T.district, T.office_state, T.branch FROM races_list T GROUP BY T.fec_committee_id, T.district, T.office_state, T.branch ORDER BY NULL) T1 GROUP BY T1.fec_committee_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
 	sql6 = "ALTER TABLE race_focus_scores ADD INDEX (fec_committee_id);"
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
@@ -480,36 +531,37 @@ def compute_final_scores(cursor):
 	# Then, finds final scores by computing the weighted average of the five scores computed above: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores, race_focus_scores.
 	# We start by joining the first four score tables: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores. We handle race_focus_score separately because this table assigns scores to contributors, rather than contributor/recipient pairs as the others.
 	# Weights used are as defined in the score_weights table.
-	sql1 = "DROP TABLE IF EXISTS four_scores;"
-	sql2 = """ CREATE TABLE four_scores (
+	sql1 = "DROP TABLE IF EXISTS five_scores;"
+	sql2 = """ CREATE TABLE five_scores (
 				fec_committee_id CHAR(9) NOT NULL,
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
-				exclusivity_score FLOAT(10),
-				report_type_score FLOAT(10),
-				periodicity_score FLOAT(10),
-				maxed_out_score FLOAT(10),
-				four_score FLOAT(10));"""
-	sql3 = "LOCK TABLES four_scores WRITE, exclusivity_scores AS T1 READ, report_type_scores AS T2 READ, periodicity_scores AS T3 READ, maxed_out_scores AS T4 READ, score_weights AS T6 READ, score_weights AS T7 READ, score_weights AS T8 READ, score_weights AS T9 READ, exclusivity_scores AS T11 READ, report_type_scores AS T12 READ, periodicity_scores AS T13 READ, maxed_out_scores AS T14 READ, score_weights AS T16 READ, score_weights AS T17 READ, score_weights AS T18 READ, score_weights AS T19 READ;"
-	sql4 = "INSERT INTO four_scores (fec_committee_id, contributor_name, other_id, recipient_name, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, four_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(T1.exclusivity_score, 0) AS exclusivity_score, IFNULL(T2.report_type_score, 0) AS report_type_score, IFNULL(T3.periodicity_score, 0) AS periodicity_score, IFNULL(T4.maxed_out_score, 0) AS maxed_out_score, IFNULL(T1.exclusivity_score, 0) * (SELECT T6.weight FROM score_weights T6 WHERE T6.score_type = 'exclusivity_score') + IFNULL(T2.report_type_score, 0) * (SELECT T7.weight FROM score_weights T7 WHERE T7.score_type = 'report_type_score') + IFNULL(T3.periodicity_score, 0) * (SELECT T8.weight FROM score_weights T8 WHERE T8.score_type = 'periodicity_score') + IFNULL(T4.maxed_out_score, 0) * (SELECT T9.weight FROM score_weights T9 WHERE T9.score_type = 'maxed_out_score') AS four_score FROM exclusivity_scores T1 LEFT OUTER JOIN report_type_scores T2 ON T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id LEFT OUTER JOIN periodicity_scores T3 ON T1.fec_committee_id = T3.fec_committee_id AND T1.other_id = T3.other_id LEFT OUTER JOIN maxed_out_scores T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id UNION SELECT T11.fec_committee_id, T11.contributor_name, T11.other_id, T11.recipient_name, IFNULL(T11.exclusivity_score, 0) AS exclusivity_score, IFNULL(T12.report_type_score, 0) AS report_type_score, IFNULL(T13.periodicity_score, 0) AS periodicity_score, IFNULL(T14.maxed_out_score, 0) AS maxed_out_score, IFNULL(T11.exclusivity_score, 0) * (SELECT T16.weight FROM score_weights T16 WHERE T16.score_type = 'exclusivity_score') + IFNULL(T12.report_type_score, 0) * (SELECT T17.weight FROM score_weights T17 WHERE T17.score_type = 'report_type_score') + IFNULL(T13.periodicity_score, 0) * (SELECT T18.weight FROM score_weights T18 WHERE T18.score_type = 'periodicity_score') + IFNULL(T14.maxed_out_score, 0) * (SELECT T19.weight FROM score_weights T19 WHERE T19.score_type = 'maxed_out_score')  AS four_score FROM exclusivity_scores T11 RIGHT OUTER JOIN report_type_scores T12 ON T11.fec_committee_id = T12.fec_committee_id AND T11.other_id = T12.other_id RIGHT OUTER JOIN periodicity_scores T13 ON T11.fec_committee_id = T13.fec_committee_id AND T11.other_id = T13.other_id RIGHT OUTER JOIN maxed_out_scores T14 ON T11.fec_committee_id = T14.fec_committee_id AND T11.other_id = T14.other_id;"
+				exclusivity_score FLOAT(20),
+				report_type_score FLOAT(20),
+				periodicity_score FLOAT(20),
+				maxed_out_score FLOAT(20),
+				length_score FLOAT(20),
+				five_score FLOAT(20));"""
+	sql3 = "LOCK TABLES five_scores WRITE, exclusivity_scores AS T1 READ, report_type_scores AS T2 READ, periodicity_scores AS T3 READ, maxed_out_scores AS T4 READ, length_scores AS T5 READ, score_weights AS T6 READ, score_weights AS T7 READ, score_weights AS T8 READ, score_weights AS T9 READ, score_weights as T10 READ;"
+	sql4 = "INSERT INTO five_scores (fec_committee_id, contributor_name, other_id, recipient_name, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, five_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(T1.exclusivity_score, 0) AS exclusivity_score, IFNULL(T2.report_type_score, 0) AS report_type_score, IFNULL(T3.periodicity_score, 0) AS periodicity_score, IFNULL(T4.maxed_out_score, 0) AS maxed_out_score, IFNULL(T5.length_score, 0) AS length_score, IFNULL(T1.exclusivity_score, 0) * (SELECT T6.weight FROM score_weights T6 WHERE T6.score_type = 'exclusivity_score') + IFNULL(T2.report_type_score, 0) * (SELECT T7.weight FROM score_weights T7 WHERE T7.score_type = 'report_type_score') + IFNULL(T3.periodicity_score, 0) * (SELECT T8.weight FROM score_weights T8 WHERE T8.score_type = 'periodicity_score') + IFNULL(T4.maxed_out_score, 0) * (SELECT T9.weight FROM score_weights T9 WHERE T9.score_type = 'maxed_out_score') + IFNULL(T5.length_score, 0) * (SELECT T10.weight FROM score_weights T10 WHERE T10.score_type = 'length_score') AS five_score FROM exclusivity_scores T1 JOIN report_type_scores T2 ON T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id JOIN periodicity_scores T3 ON T1.fec_committee_id = T3.fec_committee_id AND T1.other_id = T3.other_id JOIN maxed_out_scores T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id JOIN length_scores T5 ON T1.fec_committee_id = T5.fec_committee_id AND T1.other_id = T5.other_id;" 	
 	sql5 = "UNLOCK TABLES;"
-	sql6 = "ALTER TABLE four_scores ADD INDEX (fec_committee_id, other_id);"
+	sql6 = "ALTER TABLE five_scores ADD INDEX (fec_committee_id, other_id);"
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
-	print "Table four_scores"
+	print "Table five_scores"
 
-	# Finally, we add weighted race_focus_scores to the four_scores table and get the full final score.
+	# Finally, we add weighted race_focus_scores to the five_scores table and get the full final score.
 	sql1 = "DROP TABLE IF EXISTS final_scores;"
 	sql2 = """ CREATE TABLE final_scores (
 				fec_committee_id CHAR(9) NOT NULL,
 				contributor_name CHAR(200),
 				other_id CHAR(9) NOT NULL,
 				recipient_name CHAR(200),
-				four_score FLOAT(10),
-				race_focus_score FLOAT(10),
-				final_score FLOAT(10));"""
-	sql3 = "LOCK TABLES final_scores WRITE, four_scores AS T1 READ, race_focus_scores AS T2 READ, score_weights AS T3 READ;"
-	sql4 = "INSERT INTO final_scores (fec_committee_id, contributor_name, other_id, recipient_name, four_score, race_focus_score, final_score) SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.four_score, IFNULL(T2.race_focus_score, 0) AS race_focus_score, T1.four_score + IFNULL(T2.race_focus_score, 0) * (SELECT T3.weight FROM score_weights T3 WHERE T3.score_type = 'race_focus_score') AS final_score FROM four_scores T1 LEFT OUTER JOIN race_focus_scores T2 ON T1.fec_committee_id = T2.fec_committee_id) T ORDER BY T.final_score DESC;"
+				five_score FLOAT(20),
+				race_focus_score FLOAT(20),
+				final_score FLOAT(20));"""
+	sql3 = "LOCK TABLES final_scores WRITE, five_scores AS T1 READ, race_focus_scores AS T2 READ, score_weights AS T3 READ;"
+	sql4 = "INSERT INTO final_scores (fec_committee_id, contributor_name, other_id, recipient_name, five_score, race_focus_score, final_score) SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.five_score, IFNULL(T2.race_focus_score, 0) AS race_focus_score, T1.five_score + IFNULL(T2.race_focus_score, 0) * (SELECT T3.weight FROM score_weights T3 WHERE T3.score_type = 'race_focus_score') AS final_score FROM five_scores T1 LEFT OUTER JOIN race_focus_scores T2 ON T1.fec_committee_id = T2.fec_committee_id) T ORDER BY T.final_score DESC;"
 	sql5 = "UNLOCK TABLES;"
 	sql6 = "ALTER TABLE final_scores ADD INDEX (fec_committee_id, other_id);"
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
