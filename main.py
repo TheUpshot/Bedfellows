@@ -8,7 +8,7 @@ def main():
 	#create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
 	#compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
 	#compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
-	#compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
+	compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
 	#compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
 	compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
 	#compute_race_focus_scores(cursor)						# 6th score 		# bumps up scores according to geographical proximity
@@ -212,7 +212,8 @@ def compute_periodicity_scores(cursor):
 				recipient_name CHAR(200),
 				periodicity_score FLOAT(20));"""
 	sql3 = "LOCK TABLES unnormalized_periodicity_scores WRITE, super_PACs_list AS T2 READ, super_PACs_list AS T3 READ, fec_committee_contributions AS T1 READ;"
-	sql4 = "INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0) AS periodicity_score FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T2) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list T3) GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;"
+    #sql4 = "INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0) AS periodicity_score FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T2) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list T3) GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;"
+	sql4 = "INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IF(VAR_POP(DAYOFYEAR(T1.date)) = 0, IF(COUNT(DISTINCT(T1.date)) > 1, 1, 0), IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0)) AS periodicity_score FROM fec_committee_contributions T1 WHERE T1.transaction_type = '24K' AND T1.entity_type = 'PAC' AND EXTRACT(YEAR FROM T1.date) >= '2003' AND T1.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T2) AND T1.other_id NOT IN (SELECT fecid FROM super_PACs_list T3) GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;"
 	sql5 = "UNLOCK TABLES;"
 	sql6 = "ALTER TABLE unnormalized_periodicity_scores ADD INDEX (periodicity_score);" # Might need to change this, see overall_score!
 	commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
