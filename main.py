@@ -7,13 +7,13 @@ from sys import stdout
 def main():
 	cursor = db.cursor()
 
-	initial_setup(cursor)
-	create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
-	compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
-	compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
-	compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
-	compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
-	compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
+	#initial_setup(cursor)
+	#create_super_PACs_list(cursor)												# reads .csv file of super PACs into the database
+	#compute_exclusivity_scores(cursor)        				# 1st score			# bumps up scores of donations made exclusively to a given recipient
+	#compute_report_type_scores(cursor)						# 2nd score			# bumps up scores according to how early in election cycle donations were made
+	#compute_periodicity_scores(cursor)						# 3rd score			# bumps up scores if donations are made around the same time of the year	
+	#compute_maxed_out_scores(cursor)						# 4th score 		# bumps up scores if contributors maxed out on donations to corresponding recipient
+	#compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
 	compute_race_focus_scores(cursor)						# 6th score 		# bumps up scores according to geographical proximity
 	compute_final_scores(cursor)							# Sum of scores 	# computes weighted sum of all scores
 	db.close()
