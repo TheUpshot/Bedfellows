@@ -29,12 +29,13 @@ def initial_setup(cursor):
     commit_changes(cursor, sql)
     print "Table super_PACs_list"
 
+    # Adds indexes to fec_committee_contributions before saving a constrained subset as fec_contributions.
     try:
         cursor.execute("ALTER TABLE fec_committee_contributions ADD INDEX (transaction_type, entity_type, date, fec_committee_id, other_id);")
     except MySQLdb.Error, e:
         handle_error(e)
 
-    # Constrain FEC's fec_committee_contributions table to our needs: select subset of attributes that will be useful in queries, constrain on transaction type '24K', entity type 'PAC', year 2003 or later, contributor and recipient not present in list of super PACs.
+    # Constrains FEC's fec_committee_contributions table to our needs: select subset of attributes that will be useful in queries, constrain on transaction type '24K', entity type 'PAC', year 2003 or later, contributor and recipient not present in list of super PACs.
     sql = []
     sql.append("DROP TABLE IF EXISTS fec_contributions;")
     sql.append(""" CREATE TABLE fec_contributions (
