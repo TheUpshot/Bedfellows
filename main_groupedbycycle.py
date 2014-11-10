@@ -1,9 +1,12 @@
 import MySQLdb, sys, csv
 from sys import stdout
 
+db = MySQLdb.connect()
 INFINITY = 9999999999999;
 
-def main():
+def main(database):
+    print "Scores grouped by election cycle"
+    db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=database) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
     cursor = db.cursor()
 
     initial_setup(cursor)
@@ -14,6 +17,7 @@ def main():
     compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
     compute_race_focus_scores(cursor)                      # 6th score         # bumps up scores according to geographical proximity
     compute_final_scores(cursor)                           # Sum of scores     # computes weighted sum of all scores
+    
     db.close()
 
 def initial_setup(cursor):
@@ -652,8 +656,7 @@ def usage():
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
-        db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=sys.argv[1]) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
-        main()
+        main(sys.argv[1])
     else:
         usage()
         sys.exit(1)
