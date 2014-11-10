@@ -16,19 +16,21 @@ def main():
 
 def initial_setup(cursor):
     # Reads into database table with ID's of super PACs to be excluded from this analysis.
-    sql1 = "DROP TABLE IF EXISTS super_PACs_list;"
-    sql2 = """ CREATE TABLE super_PACs_list (
-                fecid CHAR(9) NOT NULL);"""
-    sql3 = "LOCK TABLES super_PACs_list WRITE, fec_committees AS T READ;"
-    sql4 = "INSERT INTO super_PACs_list (fecid) SELECT T.fecid FROM fec_committees T WHERE T.is_super_PAC = '1';"
-    sql5 = "UNLOCK TABLES;" 
-    sql6 = "ALTER TABLE super_PACs_list ADD INDEX (fecid);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+    sql = []
+    sql.append("DROP TABLE IF EXISTS super_PACs_list;")
+    sql.append(""" CREATE TABLE super_PACs_list (
+                fecid CHAR(9) NOT NULL);""")
+    sql.append("LOCK TABLES super_PACs_list WRITE, fec_committees AS T READ;")
+    sql.append("INSERT INTO super_PACs_list (fecid) SELECT T.fecid FROM fec_committees T WHERE T.is_super_PAC = '1';")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE super_PACs_list ADD INDEX (fecid);")
+    commit_changes(cursor, sql)
     print "Table super_PACs_list"
 
+    sql = []
     # Constrain FEC's fec_committee_contributions obtained to our needs: select subset of attributes that will be useful in queries, constrain on transaction type '24K', entity type 'PAC', year 2003 or later, contributor and recipient not present in list of super PACs.
-    sql1 = "DROP TABLE IF EXISTS fec_contributions;"
-    sql2 = """ CREATE TABLE fec_contributions (
+    sql.append("DROP TABLE IF EXISTS fec_contributions;")
+    sql.append(""" CREATE TABLE fec_contributions (
                 fec_committee_id CHAR(9) NOT NULL,
                 report_type CHAR(5),
                 contributor_name CHAR(200),
@@ -36,12 +38,12 @@ def initial_setup(cursor):
                 amount CHAR(10),
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
-                cycle CHAR(5);"""
-    sql3 = "LOCK TABLES fec_contributions WRITE, fec_committee_contributions AS T READ;"
-    sql4 = "INSERT INTO fec_contributions (fec_committee_id, report_type, contributor_name, date, amount, other_id, recipient_name, cycle) SELECT T.fec_committee_id, T.report_type, T.contributor_name, T.date, T.amount, T.other_id, T.recipient_name, T.cycle FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' AND T.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T1) AND T.other_id NOT IN (SELECT fecid FROM super_PACs_list T2);"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE fec_contributions ADD INDEX (fec_committee_id, other_id, cycle);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                cycle CHAR(5);""")
+    sql.append("LOCK TABLES fec_contributions WRITE, fec_committee_contributions AS T READ;")
+    sql.append("INSERT INTO fec_contributions (fec_committee_id, report_type, contributor_name, date, amount, other_id, recipient_name, cycle) SELECT T.fec_committee_id, T.report_type, T.contributor_name, T.date, T.amount, T.other_id, T.recipient_name, T.cycle FROM fec_committee_contributions T WHERE T.transaction_type = '24K' AND T.entity_type = 'PAC' AND EXTRACT(YEAR FROM T.date) >= '2003' AND T.fec_committee_id NOT IN (SELECT fecid FROM super_PACs_list T1) AND T.other_id NOT IN (SELECT fecid FROM super_PACs_list T2);")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE fec_contributions ADD INDEX (fec_committee_id, other_id, cycle);")
+    commit_changes(cursor, sql)
     print "Table fec_contributions"
 
     cursor.execute("ALTER TABLE fec_contributions ADD INDEX (fec_committee_id, other_id, report_type);")
@@ -58,25 +60,27 @@ def initial_setup(cursor):
     print "Initial setup done"
 
 
-def compute_exclusivity_scores(cursor):  
+def compute_exclusivity_scores(cursor):
+    sql = []
     # First, computes total amount donated by a given PAC contributor across all recipients. 
-    sql1 = "DROP TABLE IF EXISTS total_donated_by_PAC;"
-    sql2 =  """ CREATE TABLE total_donated_by_PAC (
+    sql.append("DROP TABLE IF EXISTS total_donated_by_PAC;")
+    sql.append(""" CREATE TABLE total_donated_by_PAC (
                 fec_committee_id CHAR(9) NOT NULL,
                 cycle CHAR(5),
                 contributor_name CHAR(200),
-                total_by_PAC FLOAT(20));"""
-    sql3 = "LOCK TABLES total_donated_by_PAC WRITE, fec_contributions AS T READ;"
-    sql4 = "INSERT INTO total_donated_by_PAC (fec_committee_id, cycle, contributor_name, total_by_PAC) SELECT T.fec_committee_id, T.cycle, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_contributions T GROUP BY T.fec_committee_id, T.cycle ORDER BY NULL;"
-    sql5 = "UNLOCK TABLES;" 
-    sql6 = "ALTER TABLE total_donated_by_PAC ADD INDEX (fec_committee_id, cycle);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                total_by_PAC FLOAT(20));""")
+    sql.append("LOCK TABLES total_donated_by_PAC WRITE, fec_contributions AS T READ;")
+    sql.append("INSERT INTO total_donated_by_PAC (fec_committee_id, cycle, contributor_name, total_by_PAC) SELECT T.fec_committee_id, T.cycle, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_contributions T GROUP BY T.fec_committee_id, T.cycle ORDER BY NULL;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE total_donated_by_PAC ADD INDEX (fec_committee_id, cycle);")
+    commit_changes(cursor, sql)
     print "Table total_donated_by_PAC"
 
     # Then, computes exclusivity score for a given contributor/recipient pair. Score is calculated as follows: amount given to recipient as percentage of total donated by contributor.
     # No need for normalization because scores are capped at 1, so 0-1 scale is already enforced.
-    sql1 = "DROP TABLE IF EXISTS exclusivity_scores;"
-    sql2 = """ CREATE TABLE exclusivity_scores (
+    sql = []
+    sql.append("DROP TABLE IF EXISTS exclusivity_scores;")
+    sql.append(""" CREATE TABLE exclusivity_scores (
                 fec_committee_id CHAR(9) NOT NULL,
                 contributor_name CHAR(200),
                 total_by_pac CHAR(10),
@@ -84,12 +88,12 @@ def compute_exclusivity_scores(cursor):
                 recipient_name CHAR(200),
                 cycle CHAR(5),
                 amount CHAR(10),
-                exclusivity_score FLOAT(20));"""
-    sql3 = "LOCK TABLES exclusivity_scores WRITE, total_donated_by_PAC AS T1 READ, fec_contributions AS T2 READ;"
-    sql4 = "INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, cycle, amount, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, T.cycle, SUM(T.amount) AS total_amount, IF(SUM(exclusivity_subscore) > 1, 1, SUM(exclusivity_subscore)) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.cycle, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.cycle = T2.cycle) T GROUP BY T.fec_committee_id, T.other_id, T.cycle ORDER BY NULL;"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE exclusivity_scores ADD INDEX (fec_committee_id, other_id, cycle);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                exclusivity_score FLOAT(20));""")
+    sql.append("LOCK TABLES exclusivity_scores WRITE, total_donated_by_PAC AS T1 READ, fec_contributions AS T2 READ;")
+    sql.append("INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, cycle, amount, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, T.cycle, SUM(T.amount) AS total_amount, IF(SUM(exclusivity_subscore) > 1, 1, SUM(exclusivity_subscore)) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.cycle, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.cycle = T2.cycle) T GROUP BY T.fec_committee_id, T.other_id, T.cycle ORDER BY NULL;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE exclusivity_scores ADD INDEX (fec_committee_id, other_id, cycle);")
+    commit_changes(cursor, sql)
     print "Table exclusivity_scores"
 
 
@@ -123,10 +127,10 @@ def compute_report_type_scores(cursor):
     except MySQLdb.Error, e:
         handle_error(e)
     print "Table report_type_weights"
-
+    sql = []
     # Next, computes how often each report type occurs for each PAC, split by parity.
-    sql1 = "DROP TABLE IF EXISTS report_type_count_by_pair;"
-    sql2 = """ CREATE TABLE report_type_count_by_pair (
+    sql.append("DROP TABLE IF EXISTS report_type_count_by_pair;")
+    sql.append(""" CREATE TABLE report_type_count_by_pair (
                 fec_committee_id CHAR(9) NOT NULL,
                 contributor_name CHAR(200),
                 other_id CHAR(9) NOT NULL,
@@ -135,31 +139,33 @@ def compute_report_type_scores(cursor):
                 report_type CHAR(4),
                 year_parity CHAR(5),
                 d_date DATE, 
-                count INT(10));"""
-    sql3 = "LOCK TABLES report_type_count_by_pair WRITE, exclusivity_scores AS T1 READ, fec_contributions AS T2 READ;"
-    sql4 = "INSERT INTO report_type_count_by_pair (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type, year_parity, d_date, count) SELECT T1.fec_committee_id, T1.contributor_name, T2.other_id, T2.recipient_name, T2.cycle, T2.report_type, IF(MOD(EXTRACT(YEAR FROM T2.date), 2) = 0, 'even', 'odd') AS year_parity, T2.date, count(*) FROM fec_contributions AS T2, exclusivity_scores AS T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id GROUP BY T2.fec_committee_id, T2.other_id, T2.cycle, T2.report_type ORDER BY NULL;"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE report_type_count_by_pair ADD INDEX (fec_committee_id, other_id, cycle);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                count INT(10));""")
+    sql.append("LOCK TABLES report_type_count_by_pair WRITE, exclusivity_scores AS T1 READ, fec_contributions AS T2 READ;")
+    sql.append("INSERT INTO report_type_count_by_pair (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type, year_parity, d_date, count) SELECT T1.fec_committee_id, T1.contributor_name, T2.other_id, T2.recipient_name, T2.cycle, T2.report_type, IF(MOD(EXTRACT(YEAR FROM T2.date), 2) = 0, 'even', 'odd') AS year_parity, T2.date, count(*) FROM fec_contributions AS T2, exclusivity_scores AS T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id GROUP BY T2.fec_committee_id, T2.other_id, T2.cycle, T2.report_type ORDER BY NULL;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE report_type_count_by_pair ADD INDEX (fec_committee_id, other_id, cycle);")
+    commit_changes(cursor, sql)
     print "Table report_type_count_by_pair"
 
     # Then, counts how many times each contributor/recipient pair occurs in database (i.e. how many times contributor donated to recipient.) 
-    sql1 = "DROP TABLE IF EXISTS pairs_count;"
-    sql2 = """ CREATE TABLE pairs_count (
+    sql = []
+    sql.append("DROP TABLE IF EXISTS pairs_count;")
+    sql.append(""" CREATE TABLE pairs_count (
                 fec_committee_id CHAR(9) NOT NULL,
                 other_id CHAR(9) NOT NULL,
                 cycle CHAR(5),
-                count INT(10));"""
-    sql3 = "LOCK TABLES pairs_count WRITE, fec_contributions AS T READ;"
-    sql4 = "INSERT INTO pairs_count (fec_committee_id, other_id, cycle, count) SELECT T.fec_committee_id, T.other_id, T.cycle, count(*) FROM fec_contributions T GROUP BY T.fec_committee_id, T.other_id, T.cycle ORDER BY NULL;" 
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE pairs_count ADD INDEX (fec_committee_id, other_id, cycle);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                count INT(10));""")
+    sql.append("LOCK TABLES pairs_count WRITE, fec_contributions AS T READ;")
+    sql.append("INSERT INTO pairs_count (fec_committee_id, other_id, cycle, count) SELECT T.fec_committee_id, T.other_id, T.cycle, count(*) FROM fec_contributions T GROUP BY T.fec_committee_id, T.other_id, T.cycle ORDER BY NULL;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE pairs_count ADD INDEX (fec_committee_id, other_id, cycle);")
+    commit_changes(cursor, sql)
     print "Table pairs_count"
 
     # Then, computes how often each report type occurs for a given contributor/recipient pair.
-    sql1 = "DROP TABLE IF EXISTS report_type_frequency;"
-    sql2 = """ CREATE TABLE report_type_frequency (
+    sql = []
+    sql.append("DROP TABLE IF EXISTS report_type_frequency;")
+    sql.append(""" CREATE TABLE report_type_frequency (
                 fec_committee_id CHAR(9) NOT NULL,
                 contributor_name CHAR(200),
                 other_id CHAR(9) NOT NULL,
@@ -170,55 +176,57 @@ def compute_report_type_scores(cursor):
                 d_date DATE, 
                 report_type_count_by_pair CHAR(10),
                 pairs_count INT(10),
-                report_type_frequency FLOAT(20));"""
-    sql3 = "LOCK TABLES report_type_frequency WRITE, report_type_count_by_pair AS T1 READ, pairs_count AS T2 READ;"
-    sql4 = "INSERT INTO report_type_frequency (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type, year_parity, d_date, report_type_count_by_pair, pairs_count, report_type_frequency) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.cycle, T1.report_type, T1.year_parity, T1.d_date, T1.count AS report_type_count_by_pair, T2.count AS pairs_count, T1.count/T2.count AS report_type_frequency FROM report_type_count_by_pair T1, pairs_count T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id AND T1.cycle = T2.cycle;"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE report_type_count_by_pair ADD INDEX (report_type, year_parity);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                report_type_frequency FLOAT(20));""")
+    sql.append("LOCK TABLES report_type_frequency WRITE, report_type_count_by_pair AS T1 READ, pairs_count AS T2 READ;")
+    sql.append("INSERT INTO report_type_frequency (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type, year_parity, d_date, report_type_count_by_pair, pairs_count, report_type_frequency) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.cycle, T1.report_type, T1.year_parity, T1.d_date, T1.count AS report_type_count_by_pair, T2.count AS pairs_count, T1.count/T2.count AS report_type_frequency FROM report_type_count_by_pair T1, pairs_count T2 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id AND T1.cycle = T2.cycle;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE report_type_count_by_pair ADD INDEX (report_type, year_parity);")
+    commit_changes(cursor, sql)
     print "Table report_type_frequency"
 
     # For each pair and report type, computes report type subscore as frequency of subscore for the pair times weight associated with report type. Overall score is simply sum of all subscores associated with a pair.
-    sql1 = "DROP TABLE IF EXISTS unnormalized_report_type_scores;"
-    sql2 = """ CREATE TABLE unnormalized_report_type_scores (
+    sql = []
+    sql.append("DROP TABLE IF EXISTS unnormalized_report_type_scores;")
+    sql.append(""" CREATE TABLE unnormalized_report_type_scores (
                 fec_committee_id CHAR(9) NOT NULL,
                 contributor_name CHAR(200),
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
                 cycle CHAR(5),
-                report_type_score FLOAT(20));"""
-    sql3 = "LOCK TABLES unnormalized_report_type_scores WRITE, report_type_weights AS T1 READ, report_type_frequency AS T2 READ;"
-    sql4 = "INSERT INTO unnormalized_report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type_score) SELECT T3.fec_committee_id, T3.contributor_name, T3.other_id, T3.recipient_name, T3.cycle, SUM(T3.report_type_subscore) AS report_type_score FROM (SELECT T2.fec_committee_id, T2.contributor_name, T2.other_id, T2.recipient_name, T2.cycle, T2.report_type_frequency * T1.weight AS report_type_subscore FROM report_type_weights T1, report_type_frequency T2 WHERE T1.report_type = T2.report_type AND T1.year_parity = T2.year_parity) T3 GROUP BY T3.fec_committee_id, T3.other_id, T3.cycle ORDER BY NULL;"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE unnormalized_report_type_scores ADD INDEX (report_type_score);" 
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                report_type_score FLOAT(20));""")
+    sql.append("LOCK TABLES unnormalized_report_type_scores WRITE, report_type_weights AS T1 READ, report_type_frequency AS T2 READ;")
+    sql.append("INSERT INTO unnormalized_report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type_score) SELECT T3.fec_committee_id, T3.contributor_name, T3.other_id, T3.recipient_name, T3.cycle, SUM(T3.report_type_subscore) AS report_type_score FROM (SELECT T2.fec_committee_id, T2.contributor_name, T2.other_id, T2.recipient_name, T2.cycle, T2.report_type_frequency * T1.weight AS report_type_subscore FROM report_type_weights T1, report_type_frequency T2 WHERE T1.report_type = T2.report_type AND T1.year_parity = T2.year_parity) T3 GROUP BY T3.fec_committee_id, T3.other_id, T3.cycle ORDER BY NULL;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE unnormalized_report_type_scores ADD INDEX (report_type_score);")
+    commit_changes(cursor, sql)
     print "Table unnormalized_report_type_scores"
 
     # Finds maximum score in unnormalized_report_type_scores table.
-    sql1 = "DROP TABLE IF EXISTS max_report_type_score;"
-    sql2 = """ CREATE TABLE max_report_type_score (
-                max_report_type_score FLOAT(20));"""
-    sql3 = "LOCK TABLES max_report_type_score WRITE, unnormalized_report_type_scores AS T READ;"
-    sql4 = "INSERT INTO max_report_type_score (max_report_type_score) SELECT MAX(report_type_score) AS max_report_type_score FROM unnormalized_report_type_scores T;"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "" 
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+    sql = []
+    sql.append("DROP TABLE IF EXISTS max_report_type_score;")
+    sql.append(""" CREATE TABLE max_report_type_score (
+                max_report_type_score FLOAT(20));""")
+    sql.append("LOCK TABLES max_report_type_score WRITE, unnormalized_report_type_scores AS T READ;")
+    sql.append("INSERT INTO max_report_type_score (max_report_type_score) SELECT MAX(report_type_score) AS max_report_type_score FROM unnormalized_report_type_scores T;")
+    sql.append("UNLOCK TABLES;")
+    commit_changes(cursor, sql)
     print "Table max_report_type_score"
 
     # Finally, finds final scores by normalizing scores in table unnormalized_report_type_scores. Normalization is done by simply dividing all scores by maximum score stored in max_report_type_score table, so as to ensure scores fall in a scale from 0 to 1.
-    sql1 = "DROP TABLE IF EXISTS report_type_scores;"
-    sql2 = """ CREATE TABLE report_type_scores (
+    sql = []
+    sql.append("DROP TABLE IF EXISTS report_type_scores;")
+    sql.append(""" CREATE TABLE report_type_scores (
                 fec_committee_id CHAR(9) NOT NULL,
                 contributor_name CHAR(200),
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
                 cycle CHAR(5),
-                report_type_score FLOAT(20));"""
-    sql3 = "LOCK TABLES report_type_scores WRITE, unnormalized_report_type_scores AS T1 READ, max_report_type_score AS T2 READ;"
-    sql4 = "INSERT INTO report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.cycle, T1.report_type_score/T2.max_report_type_score AS report_type_score FROM unnormalized_report_type_scores T1, max_report_type_score T2;"
-    sql5 = "UNLOCK TABLES;"
-    sql6 = "ALTER TABLE report_type_scores ADD INDEX (fec_committee_id, other_id, cycle);"
-    commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6)
+                report_type_score FLOAT(20));""")
+    sql.append("LOCK TABLES report_type_scores WRITE, unnormalized_report_type_scores AS T1 READ, max_report_type_score AS T2 READ;")
+    sql.append("INSERT INTO report_type_scores (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.cycle, T1.report_type_score/T2.max_report_type_score AS report_type_score FROM unnormalized_report_type_scores T1, max_report_type_score T2;")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE report_type_scores ADD INDEX (fec_committee_id, other_id, cycle);")
+    commit_changes(cursor, sql)
     print "Table report_type_scores"
 
 def compute_periodicity_scores(cursor):
@@ -588,13 +596,8 @@ def compute_final_scores(cursor):
 
 def commit_changes(cursor, sql1, sql2, sql3, sql4, sql5, sql6):
     try:
-        cursor.execute(sql1)
-        cursor.execute(sql2)
-        cursor.execute(sql3)
-        cursor.execute(sql4)
-        cursor.execute(sql5)
-        if sql6 != "":
-            cursor.execute(sql6)
+        for q in sql:
+            cursor.execute(q)
         db.commit()
     except MySQLdb.Error, e:
         handle_error(e)
