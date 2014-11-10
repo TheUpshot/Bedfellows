@@ -1,5 +1,14 @@
 import sys, main_overall, main_groupedbycycle
 
+def usage():
+    sys.stderr.write("""
+        Usage:
+        python main.py <Flag: 'overall' or 'cycle'> <Name of Database> \n
+        Examples:
+        python main.py overall fec
+        python main.py cycle new
+		\n""")
+
 if __name__ == "__main__":
     if len(sys.argv) == 3:
         if sys.argv[1] == 'overall':
@@ -12,12 +21,3 @@ if __name__ == "__main__":
     else:
        usage()
        sys.exit(1)
-
-def usage():
-    sys.stderr.write("""
-        Usage:
-        python main.py <Method: 'overall' or 'cycle'> <Name of Database> \n
-        Examples:
-        python main.py overall fec
-        python main.py cycle new
-		\n""")
