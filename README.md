@@ -1,12 +1,13 @@
 PAC_affinity_scores
 ===================
 
-Usage:
-		python main.py Name-of-Database
+        Usage:
+        python main.py <Flag: 'overall' or 'cycle'> <Name of Database> 
 
-Example:
-		python main.py fec
+        Examples:
+        python main.py overall fec
+        python main.py cycle new
 	
-Note that code assumes that database contains tables fec_committee_contributions, fec_candidates and fec_committees.
+Note that it is required that a database containing tables fec_committee_contributions, fec_candidates and fec_committees be specified as 3rd parameter.
 
-main.py is deprecated, refer to main_overall.py and main_groupedbycycle.py
+Script main.py simply calls either main_overall.py or main_groupedbycycle.py as specified by 2nd paramater (which must be either 'overall' or 'cycle').
