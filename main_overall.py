@@ -521,7 +521,7 @@ def compute_race_focus_scores(cursor):
                 branch CHAR(2),
                 cycle CHAR(5));""")
     sql.append("LOCK TABLES races_list WRITE, fec_contributions AS T1 READ, fec_committees AS T2 READ, fec_candidates AS T3 READ;")
-    sql.append("INSERT INTO races_list (fec_committee_id, contributor_name, other_id, recipient_name, fec_candidate_id, candidate_name, district, office_state, branch, cycle) SELECT DISTINCT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T2.fec_candidate_id, T3.name as candidate_name, T3.district, T3.office_state, T3.branch, T3.cycle FROM fec_contributions T1, fec_committees T2, fec_candidates T3 WHERE T2.fec_candidate_id = T3.fecid AND T1.cycle = t2.cycle AND t2.cycle = t3.cycle AND T1.other_id = T2.fecid AND T2.fec_candidate_id REGEXP '^[HPS]';")
+    sql.append("INSERT INTO races_list (fec_committee_id, contributor_name, other_id, recipient_name, fec_candidate_id, candidate_name, district, office_state, branch, cycle) SELECT DISTINCT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T2.fec_candidate_id, T3.name as candidate_name, T3.district, T3.office_state, T3.branch, T3.cycle FROM fec_contributions T1, fec_committees T2, fec_candidates T3 WHERE T2.fec_candidate_id = T3.fecid AND T1.cycle = T2.cycle AND T2.cycle = T3.cycle AND T1.other_id = T2.fecid AND T2.fec_candidate_id REGEXP '^[HPS]';")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE races_list ADD INDEX (fec_committee_id, cycle, district, office_state, branch, contributor_name);")
     commit_changes(cursor, sql)
@@ -602,11 +602,16 @@ def compute_final_scores(cursor):
                 contributor_name CHAR(200),
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
-                five_score FLOAT(20),
+                count INT(10),
+                exclusivity_score FLOAT(20),
+                report_type_score FLOAT(20),
+                periodicity_score FLOAT(20),
+                maxed_out_score FLOAT(20),
+                length_score FLOAT(20),
                 race_focus_score FLOAT(20),
                 final_score FLOAT(20));""")
-    sql.append("LOCK TABLES final_scores WRITE, five_scores AS T1 READ, race_focus_scores AS T2 READ, score_weights AS T3 READ;")
-    sql.append("INSERT INTO final_scores (fec_committee_id, contributor_name, other_id, recipient_name, five_score, race_focus_score, final_score) SELECT * FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.five_score, IFNULL(T2.race_focus_score, 0) AS race_focus_score, T1.five_score + IFNULL(T2.race_focus_score, 0) * (SELECT T3.weight FROM score_weights T3 WHERE T3.score_type = 'race_focus_score') AS final_score FROM five_scores T1 LEFT OUTER JOIN race_focus_scores T2 ON T1.fec_committee_id = T2.fec_committee_id) T;")
+    sql.append("LOCK TABLES final_scores WRITE, five_scores AS T1 READ, race_focus_scores AS T2 READ, score_weights AS T3 READ, pairs_count AS T4 READ;")
+    sql.append("INSERT INTO final_scores (fec_committee_id, contributor_name, other_id, recipient_name, count, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, race_focus_score, final_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T4.count, T1.exclusivity_score, T1.report_type_score, T1.periodicity_score, T1.maxed_out_score, T1.length_score, IFNULL(T2.race_focus_score, 0) AS race_focus_score, T1.five_score + IFNULL(T2.race_focus_score, 0) * (SELECT T3.weight FROM score_weights T3 WHERE T3.score_type = 'race_focus_score') AS final_score FROM five_scores T1 JOIN race_focus_scores T2 ON T1.fec_committee_id = T2.fec_committee_id JOIN pairs_count T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id;")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE final_scores ADD INDEX (fec_committee_id, other_id);")
     commit_changes(cursor, sql)
