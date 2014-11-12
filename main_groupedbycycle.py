@@ -78,18 +78,18 @@ def initial_setup(cursor):
 def compute_exclusivity_scores(cursor):
     # First, computes total amount donated by a given PAC contributor across all recipients. 
     sql = []
-    sql.append("DROP TABLE IF EXISTS total_donated_by_PAC;")
-    sql.append(""" CREATE TABLE total_donated_by_PAC (
+    sql.append("DROP TABLE IF EXISTS total_donated_by_contributor;")
+    sql.append(""" CREATE TABLE total_donated_by_contributor (
                 fec_committee_id CHAR(9) NOT NULL,
                 cycle CHAR(5),
                 contributor_name CHAR(200),
                 total_by_PAC FLOAT(20));""")
-    sql.append("LOCK TABLES total_donated_by_PAC WRITE, fec_contributions AS T READ;")
-    sql.append("INSERT INTO total_donated_by_PAC (fec_committee_id, cycle, contributor_name, total_by_PAC) SELECT T.fec_committee_id, T.cycle, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_contributions T GROUP BY T.fec_committee_id, T.cycle ORDER BY NULL;")
+    sql.append("LOCK TABLES total_donated_by_contributor WRITE, fec_contributions AS T READ;")
+    sql.append("INSERT INTO total_donated_by_contributor (fec_committee_id, cycle, contributor_name, total_by_PAC) SELECT T.fec_committee_id, T.cycle, T.contributor_name, SUM(T.amount) AS total_by_PAC FROM fec_contributions T GROUP BY T.fec_committee_id, T.cycle ORDER BY NULL;")
     sql.append("UNLOCK TABLES;")
-    sql.append("ALTER TABLE total_donated_by_PAC ADD INDEX (fec_committee_id, cycle, contributor_name, total_by_PAC);")
+    sql.append("ALTER TABLE total_donated_by_contributor ADD INDEX (fec_committee_id, cycle, contributor_name, total_by_PAC);")
     commit_changes(cursor, sql)
-    print "Table total_donated_by_PAC"
+    print "Table total_donated_by_contributor"
 
     # Then, computes exclusivity score for a given contributor/recipient pair. Score is calculated as follows: amount given to recipient as percentage of total donated by contributor.
     # No need for normalization because scores are capped at 1, so 0-1 scale is already enforced.
@@ -104,8 +104,8 @@ def compute_exclusivity_scores(cursor):
                 cycle CHAR(5),
                 amount CHAR(10),
                 exclusivity_score FLOAT(20));""")
-    sql.append("LOCK TABLES exclusivity_scores WRITE, total_donated_by_PAC AS T1 READ, fec_contributions AS T2 READ;")
-    sql.append("INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, cycle, amount, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, T.cycle, SUM(T.amount) AS total_amount, IF(SUM(exclusivity_subscore) > 1, 1, SUM(exclusivity_subscore)) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.cycle, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_contributions T2, total_donated_by_PAC T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.cycle = T2.cycle) T GROUP BY T.fec_committee_id, T.other_id, T.cycle ORDER BY NULL;")
+    sql.append("LOCK TABLES exclusivity_scores WRITE, total_donated_by_contributor AS T1 READ, fec_contributions AS T2 READ;")
+    sql.append("INSERT INTO exclusivity_scores (fec_committee_id, contributor_name, total_by_pac, other_id, recipient_name, cycle, amount, exclusivity_score) SELECT T.fec_committee_id, T.contributor_name, T.total_by_PAC, T.other_id, T.recipient_name, T.cycle, SUM(T.amount) AS total_amount, IF(SUM(exclusivity_subscore) > 1, 1, SUM(exclusivity_subscore)) AS exclusivity_score FROM (SELECT T1.fec_committee_id, T1.contributor_name, T1.total_by_PAC, T2.other_id, T2.recipient_name, T2.cycle, T2.amount, T2.date, T2.amount/T1.total_by_PAC AS exclusivity_subscore FROM fec_contributions T2, total_donated_by_contributor T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.cycle = T2.cycle) T GROUP BY T.fec_committee_id, T.other_id, T.cycle ORDER BY NULL;")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE exclusivity_scores ADD INDEX (fec_committee_id, other_id, cycle, contributor_name);")
     sql.append("ALTER TABLE exclusivity_scores ADD INDEX (fec_committee_id, other_id, cycle, exclusivity_score);")
@@ -143,7 +143,7 @@ def compute_report_type_scores(cursor):
         handle_error(e)
     print "Table report_type_weights"
 
-    # Next, computes how often each report type occurs for each PAC, split by parity.
+    # Next, computes how often each report type occurs for each pair, split by parity.
     sql = []
     sql.append("DROP TABLE IF EXISTS report_type_count_by_pair;")
     sql.append(""" CREATE TABLE report_type_count_by_pair (
