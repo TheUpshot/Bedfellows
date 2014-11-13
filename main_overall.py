@@ -246,9 +246,11 @@ def compute_periodicity_scores(cursor):
                 contributor_name CHAR(200),
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
+                stddev_pop FLOAT(20),
+                day_diff INT(4),
                 periodicity_score FLOAT(20));""")
     sql.append("LOCK TABLES unnormalized_periodicity_scores WRITE, fec_contributions AS T1 READ;")
-    sql.append("INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IF(VAR_POP(DAYOFYEAR(T1.date)) = 0, IF(COUNT(DISTINCT(T1.date)) > 1, 1, 0), IFNULL(1/VAR_POP(DAYOFYEAR(T1.date)), 0)) AS periodicity_score FROM fec_contributions T1 GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;")
+    sql.append("INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, stddev_pop, day_diff, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, STDDEV_POP(DAYOFYEAR(T1.date)) AS stddev_pop, MAX(DAYOFYEAR(T1.date)) - MIN(DAYOFYEAR(T1.date)) AS day_diff, IF(STDDEV_POP(DAYOFYEAR(T1.date)) = 0, IF(COUNT(DISTINCT(T1.date)) > 1, 1.0, 0), IFNULL(1.0/STDDEV_POP(DAYOFYEAR(T1.date)), 0)) AS periodicity_score FROM fec_contributions T1 GROUP BY T1.fec_committee_id, T1.other_id ORDER BY NULL;")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE unnormalized_periodicity_scores ADD INDEX (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score);")
     commit_changes(cursor, sql)
@@ -256,16 +258,16 @@ def compute_periodicity_scores(cursor):
 
     # Finds maximum score in unnormalized_periodicity_scores table.
     sql = []
-    sql.append("DROP TABLE IF EXISTS max_periodicity_score;")
-    sql.append(""" CREATE TABLE max_periodicity_score (
-                max_periodicity_score FLOAT(20));""")
-    sql.append("LOCK TABLES max_periodicity_score WRITE, unnormalized_periodicity_scores AS T READ;")
-    sql.append("INSERT INTO max_periodicity_score (max_periodicity_score) SELECT MAX(periodicity_score) AS max_periodicity_score FROM unnormalized_periodicity_scores T;")
+    sql.append("DROP TABLE IF EXISTS cap_unnormalized_score;")
+    sql.append(""" CREATE TABLE cap_unnormalized_score (
+                cap_unnormalized_score FLOAT(20));""")
+    sql.append("LOCK TABLES cap_unnormalized_score WRITE, unnormalized_periodicity_scores AS T READ;")
+    sql.append("INSERT INTO cap_unnormalized_score (cap_unnormalized_score) SELECT MIN(T.periodicity_score) FROM unnormalized_periodicity_scores T WHERE day_diff = 1;")
     sql.append("UNLOCK TABLES;")
     commit_changes(cursor, sql)
-    print "Table max_periodicity_score"
+    print "Table cap_unnormalized_score"
 
-    # Finally, finds final scores by normalizing scores in table unnormalized_periodicity_scores. Normalization is done by simply dividing all scores by maximum score stored in max_periodicity_score table, so as to ensure scores fall in a scale from 0 to 1.
+    # Finally, finds final scores by normalizing scores in table unnormalized_periodicity_scores. Normalization is done by simply dividing all scores by maximum score stored in cap_unnormalized_score table, so as to ensure scores fall in a scale from 0 to 1.
     sql = []
     sql.append("DROP TABLE IF EXISTS periodicity_scores;")
     sql.append(""" CREATE TABLE periodicity_scores (
@@ -274,8 +276,8 @@ def compute_periodicity_scores(cursor):
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
                 periodicity_score FLOAT(20));""")
-    sql.append("LOCK TABLES periodicity_scores WRITE, unnormalized_periodicity_scores AS T1 READ, max_periodicity_score AS T2 READ;")
-    sql.append("INSERT INTO periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.periodicity_score/T2.max_periodicity_score AS periodicity_score FROM unnormalized_periodicity_scores T1, max_periodicity_score T2;")
+    sql.append("LOCK TABLES periodicity_scores WRITE, unnormalized_periodicity_scores AS T1 READ, cap_unnormalized_score AS T2 READ;")
+    sql.append("INSERT INTO periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IF(T1.periodicity_score/T2.cap_unnormalized_score > 1, 1, T1.periodicity_score/T2.cap_unnormalized_score) AS periodicity_score FROM unnormalized_periodicity_scores T1, cap_unnormalized_score T2;")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE periodicity_scores ADD INDEX (fec_committee_id, other_id);")
     commit_changes(cursor, sql)
