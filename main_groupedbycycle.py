@@ -13,10 +13,10 @@ def main(database):
     compute_exclusivity_scores(cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
     compute_report_type_scores(cursor)                      # 2nd score         # bumps up scores according to how early in election cycle donations were made
     compute_periodicity_scores(cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year    
-    #compute_maxed_out_scores(cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
-    #compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
-    #compute_race_focus_scores(cursor)                      # 6th score         # bumps up scores according to geographical proximity
-    #compute_final_scores(cursor)                           # Sum of scores     # computes weighted sum of all scores
+    compute_maxed_out_scores(cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
+    compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
+    compute_race_focus_scores(cursor)                      # 6th score         # bumps up scores according to geographical proximity
+    compute_final_scores(cursor)                           # Sum of scores     # computes weighted sum of all scores
     
     db.close()
 
@@ -420,6 +420,28 @@ def compute_maxed_out_scores(cursor):
     commit_changes(cursor, sql)
     print "Table maxed_out_subscores"
 
+    # Remove from consideration contributors and recipients with subscore > 1, as we're not interested in these cases.
+    sql = []
+    sql.append("DROP TABLE IF EXISTS inbound_maxed_out_subscores;")
+    sql.append(""" CREATE TABLE inbound_maxed_out_subscores (
+                fec_committee_id CHAR(9) NOT NULL,
+                contributor_name CHAR(200),
+                contributor_type CHAR(15),
+                other_id CHAR(9) NOT NULL,
+                recipient_name CHAR(200),
+                recipient_type CHAR(15),
+                cycle CHAR(5),
+                date DATE,
+                amount FLOAT(20),
+                contribution_limit FLOAT(10),
+                maxed_out_subscore FLOAT(20));""")
+    sql.append("LOCK TABLES inbound_maxed_out_subscores WRITE, maxed_out_subscores AS T READ, maxed_out_subscores AS T1 READ, maxed_out_subscores AS T2 READ;")
+    sql.append("INSERT INTO inbound_maxed_out_subscores (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, recipient_type, cycle, date, amount, contribution_limit, maxed_out_subscore) SELECT * FROM maxed_out_subscores T WHERE T.fec_committee_id NOT IN (SELECT T1.fec_committee_id FROM maxed_out_subscores T1 WHERE maxed_out_subscore > 1) AND T.other_id NOT IN (SELECT T2.other_id FROM maxed_out_subscores T2 WHERE maxed_out_subscore > 1);")
+    sql.append("UNLOCK TABLES;")
+    sql.append("ALTER TABLE inbound_maxed_out_subscores ADD INDEX (fec_committee_id, other_id, cycle);")
+    commit_changes(cursor, sql)
+    print "Table inbound_maxed_out_subscores"
+
    # Computes unnormalized maxed out score for a given contributor/recipient pair by summing over all subscore associated with pair.
     sql = []
     sql.append("DROP TABLE IF EXISTS unnormalized_maxed_out_scores;")
@@ -434,6 +456,7 @@ def compute_maxed_out_scores(cursor):
                 maxed_out_score FLOAT(20));""")
     sql.append("LOCK TABLES unnormalized_maxed_out_scores WRITE, maxed_out_subscores AS T1 READ;")
     sql.append("INSERT INTO unnormalized_maxed_out_scores (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, cycle, recipient_type, maxed_out_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.contributor_type, T1.other_id, T1.recipient_name, T1.cycle, T1.recipient_type, SUM(T1.maxed_out_subscore) AS maxed_out_score FROM maxed_out_subscores T1 GROUP BY T1.fec_committee_id, T1.other_id, T1.cycle ORDER BY NULL;")
+    #sql.append("INSERT INTO unnormalized_maxed_out_scores (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, cycle, recipient_type, maxed_out_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.contributor_type, T1.other_id, T1.recipient_name, T1.cycle, T1.recipient_type, SUM(T1.maxed_out_subscore) AS maxed_out_score FROM maxed_out_subscores T1 WHERE fec_committee_id ALL (SELECT maxed_out_subscore FROM maxed_out_subscore)) GROUP BY T1.fec_committee_id, T1.other_id, T1.cycle ORDER BY NULL;")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE unnormalized_maxed_out_scores ADD INDEX (fec_committee_id, contributor_name, contributor_type, other_id, recipient_name, cycle, recipient_type, maxed_out_score);")
     commit_changes(cursor, sql)
