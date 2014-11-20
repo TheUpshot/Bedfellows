@@ -669,18 +669,32 @@ def compute_final_scores(cursor):
 
 
 def similarity_analysis(cursor):
-    cycle = raw_input("Enter cycle you want to query for: ")
-    cursor.execute("SELECT fec_committee_id, other_id, final_score, cycle FROM final_scores WHERE cycle = '" + cycle + "';")
-    rows = cursor.fetchall()
-    ratings_matrix = {}
+    cycle = raw_input("Enter cycle you want to query for: \n")
+    cursor.execute("SELECT fec_committee_id, other_id, final_score FROM final_scores WHERE cycle = '" + cycle + "';")
+    try:
+        rows = cursor.fetchall()
+    except MySQLdb.Error, e:
+        handle_error(e)
+    ratings_map = {}
     for r in rows:
-        if (r[0] not in ratings_matrix):
-            ratings_matrix[r[0]] = {}
-        ratings_matrix[r[0]][r[1]] = r[2]
-    adj_matrix = DataFrame(ratings_matrix).T.fillna(0)
+        if (r[0] not in ratings_map):
+            ratings_map[r[0]] = {}
+        ratings_map[r[0]][r[1]] = r[2]
+    adj_matrix = DataFrame(ratings_map).T.fillna(0)
     adj_matrix_T = adj_matrix.T
     print "Adjacency matrix computed."
-    
+
+    cursor.execute("SELECT fec_committee_id, other_id, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, race_focus_score FROM final_scores WHERE cycle = '" + cycle + "';")
+    try:
+        rows = cursor.fetchall()
+    except MySQLdb.Error, e:
+        handle_error(e)
+
+    pair_score_map = {}
+    for r in rows:
+        pair_score_map[(r[0],r[1])] = ([r[2],r[3],r[4],r[5],r[6],r[7]])
+    print "Pair-score dictionary computed."
+
     # Now use adjacency matrix to perform similarity analysis.
     while (True):
         # Ask user to input kind of similarity analysis to be performed.
@@ -696,13 +710,20 @@ def similarity_analysis(cursor):
                 cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j]))
 
             cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
-            contributor_name = cursor.fetchone()[0]
+            try: 
+                contributor_name = cursor.fetchone()[0]
+            except MySQLdb.Error, e:
+                handle_error(e)
+
             print "Top 10 contributors most similar to " + fec_committee_id + " " + contributor_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != fec_committee_id:
                     cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w + "';")
-                    contributor_name = cursor.fetchone()[0]
+                    try: 
+                        contributor_name = cursor.fetchone()[0]
+                    except MySQLdb.Error, e:
+                        handle_error(e)
                     print w, contributor_name, cosine_sim[w]
                 if index > 10:
                     break
@@ -716,13 +737,19 @@ def similarity_analysis(cursor):
                 cosine_sim[adj_matrix_T.ix[j].name] = np.dot(adj_matrix_T.ix[other_id],adj_matrix_T.ix[j])/(np.linalg.norm(adj_matrix_T.ix[other_id])*np.linalg.norm(adj_matrix_T.ix[j]))
 
             cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
-            recipient_name = cursor.fetchone()[0]
+            try:
+                recipient_name = cursor.fetchone()[0]
+            except MySQLdb.Error, e:
+                handle_error(e)
             print "Top 10 recipients most similar to " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != other_id:
                     cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w + "';")
-                    recipient_name = cursor.fetchone()[0]
+                    try: 
+                        recipient_name = cursor.fetchone()[0]
+                    except MySQLdb.Error, e:
+                        handle_error(e)
                     print w, recipient_name, cosine_sim[w]
                 if index > 10:
                     break
@@ -730,7 +757,47 @@ def similarity_analysis(cursor):
         elif analysis == "pairs":
             # In this case, pairs will be represented by a vector made up of the six scores used in the computational of final score.
             # Other ideas: nearest-neighbor search/clustering.
-            print "Coming soon."
+            fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
+            cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
+            try: 
+                contributor_name = cursor.fetchone()[0]
+            except MySQLdb.Error, e:
+                handle_error(e)
+
+            other_id = raw_input("Enter recipient's other_id: \n")
+            cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
+            try: 
+                recipient_name = cursor.fetchone()[0]
+            except MySQLdb.Error, e:
+                handle_error(e)
+
+            try: 
+                key = (fec_committee_id,other_id)
+            except:
+                sys.stderr.write(str(e))
+                sys.exit(1)
+
+            cosine_sim = {}
+            for p in pair_score_map:
+                cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p]))
+
+            print "Top 10 contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
+
+            for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
+                if w != key:
+                    cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w[0] + "';")
+                    try: 
+                        contributor_name = cursor.fetchone()[0]
+                    except MySQLdb.Error, e:
+                        handle_error(e)
+                    cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w[1] + "';")
+                    try: 
+                        recipient_name = cursor.fetchone()[0]
+                    except MySQLdb.Error, e:
+                        handle_error(e)
+                    print w[0], contributor_name, w[1], recipient_name, cosine_sim[w]
+                if index > 10:
+                    break
 
         elif analysis == "exit":
             sys.exit(1)
