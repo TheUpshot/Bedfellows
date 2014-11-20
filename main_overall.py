@@ -657,6 +657,8 @@ def compute_final_scores(cursor):
 
 
 def similarity_analysis(cursor):
+    RANK_THRESHOLD = 10
+
     # First, compute weighted adjacency matrix
     cursor.execute("SELECT fec_committee_id, other_id, final_score FROM final_scores;")
     try:
@@ -695,7 +697,7 @@ def similarity_analysis(cursor):
 
             cosine_sim = {}
             for j in range(1,adj_matrix.shape[0]):
-                cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j]))
+                cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j])) #cosine similarity as distance metric
 
             cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
             try: 
@@ -712,7 +714,7 @@ def similarity_analysis(cursor):
                     except MySQLdb.Error, e:
                         handle_error(e)
                     print w, contributor_name, cosine_sim[w]
-                if index > 10:
+                if index > RANK_THRESHOLD:
                     break
 
         # Measure cosine similarity between different recipients. Each recipient is represented by a vector of final scores of pairs it belongs to.
@@ -721,7 +723,7 @@ def similarity_analysis(cursor):
 
             cosine_sim = {}
             for j in range(1,adj_matrix_T.shape[0]):
-                cosine_sim[adj_matrix_T.ix[j].name] = np.dot(adj_matrix_T.ix[other_id],adj_matrix_T.ix[j])/(np.linalg.norm(adj_matrix_T.ix[other_id])*np.linalg.norm(adj_matrix_T.ix[j]))
+                cosine_sim[adj_matrix_T.ix[j].name] = np.dot(adj_matrix_T.ix[other_id],adj_matrix_T.ix[j])/(np.linalg.norm(adj_matrix_T.ix[other_id])*np.linalg.norm(adj_matrix_T.ix[j])) #cosine similarity as distance metric
 
             cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
             try:
@@ -738,7 +740,7 @@ def similarity_analysis(cursor):
                 except MySQLdb.Error, e:
                     handle_error(e)
                     print w, recipient_name, cosine_sim[w]
-                if index > 10:
+                if index > RANK_THRESHOLD:
                     break
 
         elif analysis == "pairs":
@@ -766,7 +768,7 @@ def similarity_analysis(cursor):
 
             cosine_sim = {}
             for p in pair_score_map:
-                cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p]))
+                cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p])) #cosine similarity as distance metric
 
             print "Top 10 contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
 
@@ -783,7 +785,7 @@ def similarity_analysis(cursor):
                     except MySQLdb.Error, e:
                         handle_error(e)
                     print w[0], contributor_name, w[1], recipient_name, cosine_sim[w]
-                if index > 10:
+                if index > RANK_THRESHOLD:
                     break
 
         elif analysis == "exit":
