@@ -3,9 +3,6 @@ from sys import stdout
 from pandas import *
 
 import numpy as np 
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-from sklearn.feature_selection import SelectKBest
 
 db = MySQLdb.connect()
 INFINITY = 9999999999999;

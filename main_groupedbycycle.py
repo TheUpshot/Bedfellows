@@ -2,6 +2,8 @@ import MySQLdb, sys, csv
 from sys import stdout
 from pandas import *
 
+import numpy as np
+
 db = MySQLdb.connect()
 INFINITY = 9999999999999;
 
