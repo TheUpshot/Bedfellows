@@ -1,5 +1,6 @@
 import MySQLdb, sys, csv
 from sys import stdout
+from pandas import *
 
 db = MySQLdb.connect()
 INFINITY = 9999999999999;
@@ -9,16 +10,23 @@ def main(database):
     db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=database) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
     cursor = db.cursor()
 
-    initial_setup(cursor)
-    compute_exclusivity_scores(cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
-    compute_report_type_scores(cursor)                      # 2nd score         # bumps up scores according to how early in election cycle donations were made
-    compute_periodicity_scores(cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year    
-    compute_maxed_out_scores(cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
-    compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
-    compute_race_focus_scores(cursor)                      # 6th score         # bumps up scores according to geographical proximity
-    compute_final_scores(cursor)                           # Sum of scores     # computes weighted sum of all scores
-    
+    option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both' accordingly. \n")
+
+    if option == "compute" or option == "both": 
+        initial_setup(cursor)
+        compute_exclusivity_scores(cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
+        compute_report_type_scores(cursor)                      # 2nd score         # bumps up scores according to how early in election cycle donations were made
+        compute_periodicity_scores(cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year
+        compute_maxed_out_scores(cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
+        compute_length_scores(cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
+        compute_race_focus_scores(cursor)                      # 6th score         # bumps up scores according to geographical proximity
+        compute_final_scores(cursor)                           # Sum of scores     # computes weighted sum of all scores
+
+    if option == "analyze" or option == "both":
+        similarity_analysis(cursor)
+
     db.close()
+
 
 def initial_setup(cursor):
     # Reads into database table with ID's of super PACs to be excluded from this analysis.
@@ -658,6 +666,78 @@ def compute_final_scores(cursor):
     sql.append("ALTER TABLE final_scores ADD INDEX (fec_committee_id, other_id, cycle);")
     commit_changes(cursor, sql)
     print "Table final_scores"
+
+
+def similarity_analysis(cursor):
+    cycle = raw_input("Enter cycle you want to query for: ")
+    cursor.execute("SELECT fec_committee_id, other_id, final_score, cycle FROM final_scores WHERE cycle = '" + cycle + "';")
+    rows = cursor.fetchall()
+    ratings_matrix = {}
+    for r in rows:
+        if (r[0] not in ratings_matrix):
+            ratings_matrix[r[0]] = {}
+        ratings_matrix[r[0]][r[1]] = r[2]
+    adj_matrix = DataFrame(ratings_matrix).T.fillna(0)
+    adj_matrix_T = adj_matrix.T
+    print "Adjacency matrix computed."
+    
+    # Now use adjacency matrix to perform similarity analysis.
+    while (True):
+        # Ask user to input kind of similarity analysis to be performed.
+        # Options: 1. Find contributors similar to a given contributor, 2. Find recipients similar to a given recipient, 3. Find pairs similar to a given pair.
+        analysis = raw_input("What kind of similarity analysis are you interested in? \n 1. To find contributors similar to a given contributor, type 'contributor'. \n 2. To find recipients similar to a given recipient, type 'recipient'. \n 3. To find pairs similar to a given pair, enter 'pairs'. \n 4. Type 'exit' to exit. \n")
+
+        # Measure cosine similarity between different contributors. Each contributor is represented by a vector of final scores of pairs it belongs to.
+        if analysis == "contributor":
+            fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
+
+            cosine_sim = {}
+            for j in range(1,adj_matrix.shape[0]):
+                cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j]))
+
+            cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
+            contributor_name = cursor.fetchone()[0]
+            print "Top 10 contributors most similar to " + fec_committee_id + " " + contributor_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
+
+            for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
+                if w != fec_committee_id:
+                    cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w + "';")
+                    contributor_name = cursor.fetchone()[0]
+                    print w, contributor_name, cosine_sim[w]
+                if index > 10:
+                    break
+
+        # Measure cosine similarity between different recipients. Each recipient is represented by a vector of final scores of pairs it belongs to.
+        elif analysis == "recipient":
+            other_id = raw_input("Enter recipient's other_id: \n")
+
+            cosine_sim = {}
+            for j in range(1,adj_matrix_T.shape[0]):
+                cosine_sim[adj_matrix_T.ix[j].name] = np.dot(adj_matrix_T.ix[other_id],adj_matrix_T.ix[j])/(np.linalg.norm(adj_matrix_T.ix[other_id])*np.linalg.norm(adj_matrix_T.ix[j]))
+
+            cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
+            recipient_name = cursor.fetchone()[0]
+            print "Top 10 recipients most similar to " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
+
+            for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
+                if w != other_id:
+                    cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w + "';")
+                    recipient_name = cursor.fetchone()[0]
+                    print w, recipient_name, cosine_sim[w]
+                if index > 10:
+                    break
+
+        elif analysis == "pairs":
+            # In this case, pairs will be represented by a vector made up of the six scores used in the computational of final score.
+            # Other ideas: nearest-neighbor search/clustering.
+            print "Coming soon."
+
+        elif analysis == "exit":
+            sys.exit(1)
+
+        else:
+            print "Invalid option."
+            break
 
 
 def commit_changes(cursor, sql):
