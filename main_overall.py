@@ -375,7 +375,7 @@ def compute_maxed_out_scores(db, cursor):
             try:
                 db.commit()
             except MySQLdb.Error, e:
-                handle_error(e)
+                handle_error(db, e)
     try:
         cursor.execute("UNLOCK TABLES;")
         cursor.execute("ALTER TABLE contribution_limits ADD INDEX (contributor_type, recipient_type, cycle, contribution_limit);")
@@ -666,7 +666,7 @@ def similarity_analysis(db, cursor):
     try:
         rows = cursor.fetchall()
     except MySQLdb.Error, e:
-        handle_error(e)
+        handle_error(db, e)
     ratings_map = {}
     for r in rows:
         if (r[0] not in ratings_map):
@@ -680,7 +680,7 @@ def similarity_analysis(db, cursor):
     try:
         rows = cursor.fetchall()
     except MySQLdb.Error, e:
-        handle_error(e)
+        handle_error(db, e)
 
     pair_score_map = {}
     for r in rows:
@@ -705,7 +705,7 @@ def similarity_analysis(db, cursor):
             try:
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
-                handle_error(e)
+                handle_error(db, e)
             print "Top 10 contributors most similar to " + fec_committee_id + " " + contributor_name + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
@@ -714,7 +714,7 @@ def similarity_analysis(db, cursor):
                     try:
                         contributor_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
-                        handle_error(e)
+                        handle_error(db, e)
                     print w, contributor_name, cosine_sim[w]
                 if index > RANK_THRESHOLD:
                     break
@@ -731,7 +731,7 @@ def similarity_analysis(db, cursor):
             try:
                 recipient_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
-                handle_error(e)
+                handle_error(db, e)
             print "Top 10 recipients most similar to " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
@@ -740,7 +740,7 @@ def similarity_analysis(db, cursor):
                     try:
                        recipient_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
-                       handle_error(e)
+                       handle_error(db, e)
                     print w, recipient_name, cosine_sim[w]
                 if index > RANK_THRESHOLD:
                     break
@@ -752,14 +752,14 @@ def similarity_analysis(db, cursor):
             try:
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
-                handle_error(e)
+                handle_error(db, e)
 
             other_id = raw_input("Enter recipient's other_id: \n")
             cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
             try:
                 recipient_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
-                handle_error(e)
+                handle_error(db, e)
 
             try:
                 key = (fec_committee_id,other_id)
@@ -779,12 +779,12 @@ def similarity_analysis(db, cursor):
                     try:
                         contributor_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
-                        handle_error(e)
+                        handle_error(db, e)
                     cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w[1] + "';")
                     try:
                         recipient_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
-                        handle_error(e)
+                        handle_error(db, e)
                     print w[0], contributor_name, w[1], recipient_name, cosine_sim[w]
                 if index > RANK_THRESHOLD:
                     break
@@ -846,11 +846,11 @@ def similarity_analysis(db, cursor):
             #cursor.execute("SELECT VAR_POP(exclusivity_score), VAR_POP(report_type_score), VAR_POP(periodicity_score), VAR_POP(maxed_out_score), VAR_POP(length_score), VAR_POP(race_focus_score), VAR_POP(final_score) FROM final_scores;")
             #cursor.execute("SELECT VAR_SAMP(exclusivity_score), VAR_SAMP(report_type_score), VAR_SAMP(periodicity_score), VAR_SAMP(maxed_out_score), VAR_SAMP(length_score), VAR_SAMP(race_focus_score), VAR_SAMP(final_sum), VAR_SAMP(four_sum) FROM final_sum;")
             cursor.execute("SELECT VAR_POP(exclusivity_score), VAR_POP(report_type_score), VAR_POP(periodicity_score), VAR_POP(maxed_out_score), VAR_POP(length_score), VAR_POP(race_focus_score), VAR_POP(final_sum), VAR_POP(four_sum), VAR_POP(two_sum) FROM final_sum;")
-            try: 
-               variances = cursor.fetchone() 
+            try:
+               variances = cursor.fetchone()
                print variances
             except MySQLdb.Error, e:
-               handle_error(e)
+               handle_error(db, e)
             var_exclusivity = variances[0]
             print "var_exclusivity = " + str(var_exclusivity)
             var_report_type = variances[1]
