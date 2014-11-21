@@ -28,7 +28,7 @@ def main(db):
         compute_final_scores(db, cursor)                           # Sum of scores     # computes weighted sum of all scores
 
     if option == "analyze" or option == "both":
-        similarity_analysis(db, cursor)
+        similarity_analysis(cursor)
 
     db.close()
 
