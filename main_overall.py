@@ -732,10 +732,10 @@ def similarity_analysis(cursor):
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != other_id:
                     cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w + "';")
-                try: 
-                    recipient_name = cursor.fetchone()[0]
-                except MySQLdb.Error, e:
-                    handle_error(e)
+                    try: 
+                       recipient_name = cursor.fetchone()[0]
+                    except MySQLdb.Error, e:
+                       handle_error(e)
                     print w, recipient_name, cosine_sim[w]
                 if index > RANK_THRESHOLD:
                     break
@@ -787,6 +787,7 @@ def similarity_analysis(cursor):
 
         elif analysis == "exit":
             sys.exit(1)
+
 
         else:
             break
