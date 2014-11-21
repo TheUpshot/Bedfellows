@@ -15,7 +15,7 @@ def main(db):
     cursor = db.cursor()
     print "Overall scores"
 
-    option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both' accordingly. \n")
+    option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both'\n")
 
     if option == "compute" or option == "both":
         initial_setup(db, cursor)
@@ -737,7 +737,7 @@ def similarity_analysis(cursor):
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != other_id:
                     cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w + "';")
-                    try: 
+                    try:
                        recipient_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
                        handle_error(e)
