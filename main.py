@@ -1,4 +1,22 @@
-import sys, main_overall, main_groupedbycycle
+import sys, csv
+import MySQLdb
+import main_overall, main_groupedbycycle
+
+def commit_changes(db, cursor, sql):
+    try:
+        for q in sql:
+            cursor.execute(q)
+        db.commit()
+    except MySQLdb.Error, e:
+        handle_error(db, e)
+
+def handle_error(db, e):
+    if e[0] == 1061: # index exists, we can move on.
+        pass
+    else:
+        db.rollback()
+        sys.stderr.write(str(e))
+        sys.exit(1)
 
 def usage():
     sys.stderr.write("""
@@ -11,10 +29,11 @@ def usage():
 
 if __name__ == "__main__":
     if len(sys.argv) == 3:
+        db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=sys.argv[2]) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
         if sys.argv[1] == 'overall':
-           main_overall.main(sys.argv[2])
+           main_overall.main(db)
         elif sys.argv[1] == 'cycle':
-           main_groupedbycycle.main(sys.argv[2])
+           main_groupedbycycle.main(db)
         else:
            usage()
            sys.exit(1)

@@ -1,20 +1,20 @@
-import MySQLdb, sys, csv
+import csv, sys
 from sys import stdout
+import MySQLdb
 from pandas import *
-
 import numpy as np
 
-db = MySQLdb.connect()
-INFINITY = 9999999999999;
+INFINITY = 9999999999999
 
-def main(database):
-    print "Scores grouped by election cycle"
-    db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=database) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
+
+def main(db):
     cursor = db.cursor()
+
+    print "Scores grouped by election cycle"
 
     option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both' accordingly. \n")
 
-    if option == "compute" or option == "both": 
+    if option == "compute" or option == "both":
         initial_setup(cursor)
         compute_exclusivity_scores(cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
         compute_report_type_scores(cursor)                      # 2nd score         # bumps up scores according to how early in election cycle donations were made
@@ -86,7 +86,7 @@ def initial_setup(cursor):
 
 
 def compute_exclusivity_scores(cursor):
-    # First, computes total amount donated by a given PAC contributor across all recipients. 
+    # First, computes total amount donated by a given PAC contributor across all recipients.
     sql = []
     sql.append("DROP TABLE IF EXISTS total_donated_by_contributor;")
     sql.append(""" CREATE TABLE total_donated_by_contributor (
@@ -164,7 +164,7 @@ def compute_report_type_scores(cursor):
                 cycle CHAR(5),
                 report_type CHAR(4),
                 year_parity CHAR(5),
-                d_date DATE, 
+                d_date DATE,
                 count INT(10));""")
     sql.append("LOCK TABLES report_type_count_by_pair WRITE, exclusivity_scores AS T1 READ, fec_contributions AS T2 READ;")
     sql.append("INSERT INTO report_type_count_by_pair (fec_committee_id, contributor_name, other_id, recipient_name, cycle, report_type, year_parity, d_date, count) SELECT T1.fec_committee_id, T1.contributor_name, T2.other_id, T2.recipient_name, T2.cycle, T2.report_type, IF(MOD(EXTRACT(YEAR FROM T2.date), 2) = 0, 'even', 'odd') AS year_parity, T2.date, count(*) FROM fec_contributions AS T2, exclusivity_scores AS T1 WHERE T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id GROUP BY T2.fec_committee_id, T2.other_id, T2.cycle, T2.report_type ORDER BY NULL;")
@@ -173,7 +173,7 @@ def compute_report_type_scores(cursor):
     commit_changes(cursor, sql)
     print "Table report_type_count_by_pair"
 
-    # Then, counts how many times each contributor/recipient pair occurs in database (i.e. how many times contributor donated to recipient.) 
+    # Then, counts how many times each contributor/recipient pair occurs in database (i.e. how many times contributor donated to recipient.)
     sql = []
     sql.append("DROP TABLE IF EXISTS pairs_count;")
     sql.append(""" CREATE TABLE pairs_count (
@@ -197,9 +197,9 @@ def compute_report_type_scores(cursor):
                 other_id CHAR(9) NOT NULL,
                 recipient_name CHAR(200),
                 cycle CHAR(5),
-                report_type CHAR(4),  
+                report_type CHAR(4),
                 year_parity CHAR(5),
-                d_date DATE, 
+                d_date DATE,
                 report_type_count_by_pair CHAR(10),
                 pairs_count INT(10),
                 report_type_frequency FLOAT(20));""")
@@ -271,7 +271,7 @@ def compute_periodicity_scores(cursor):
     sql.append("LOCK TABLES unnormalized_periodicity_scores WRITE, fec_contributions AS T1 READ;")
     sql.append("INSERT INTO unnormalized_periodicity_scores (fec_committee_id, contributor_name, other_id, recipient_name, cycle, stddev_pop, day_diff, periodicity_score) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T1.cycle, STDDEV_POP(DAYOFYEAR(T1.date)) AS stddev_pop, MAX(DAYOFYEAR(T1.date)) - MIN(DAYOFYEAR(T1.date)) AS day_diff, IF(STDDEV_POP(DAYOFYEAR(T1.date)) = 0, IF(COUNT(DISTINCT(T1.date)) > 1, 1, 0), IFNULL(1/STDDEV_POP(DAYOFYEAR(T1.date)), 0)) AS periodicity_score FROM fec_contributions T1 GROUP BY T1.fec_committee_id, T1.other_id, T1.cycle ORDER BY NULL;")
     sql.append("UNLOCK TABLES;")
-    sql.append("ALTER TABLE unnormalized_periodicity_scores ADD INDEX (fec_committee_id, contributor_name, other_id, recipient_name, cycle, periodicity_score);") 
+    sql.append("ALTER TABLE unnormalized_periodicity_scores ADD INDEX (fec_committee_id, contributor_name, other_id, recipient_name, cycle, periodicity_score);")
     commit_changes(cursor, sql)
     print "Table unnormalized_periodicity_scores"
 
@@ -306,7 +306,7 @@ def compute_periodicity_scores(cursor):
 
 def compute_maxed_out_scores(cursor):
     # Creates 'contributor_types' table in which each contributor (uniquely identified by 'fec_committee_id', also described by 'contributor_name') is assigned a 'contributor_type'.
-    # Possible values of 'contributor_type' are: 'national_party', 'other_party', 'multi_pac', 'non_multi_pac'. 
+    # Possible values of 'contributor_type' are: 'national_party', 'other_party', 'multi_pac', 'non_multi_pac'.
     # Classification is based on the following rules:
     # If committee type is 'X' or 'Y', then contributor is either national party or other party. We use national parties' fecid's to make the distinction as follows: fecid's 'C00003418', 'C00163022', 'C00027466', 'C00075820', 'C00000935', 'C00042366', 'C00010603' are known to be national parties, all others are classified as 'other_party'.
     # If committee type is one of 'N', 'Q', 'F', then contributor is either multicandidate pac or non multicandidate pac. We use multiqualify date to distinguish between multicand and non multicand pacs.
@@ -714,7 +714,7 @@ def similarity_analysis(cursor):
                 cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j])) #cosine similarity as distance metric
 
             cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
-            try: 
+            try:
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(e)
@@ -724,7 +724,7 @@ def similarity_analysis(cursor):
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != fec_committee_id:
                     cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w + "';")
-                    try: 
+                    try:
                         contributor_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
                         handle_error(e)
@@ -750,7 +750,7 @@ def similarity_analysis(cursor):
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != other_id:
                     cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w + "';")
-                    try: 
+                    try:
                         recipient_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
                         handle_error(e)
@@ -763,19 +763,19 @@ def similarity_analysis(cursor):
             # Other ideas: nearest-neighbor search/clustering.
             fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
             cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
-            try: 
+            try:
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(e)
 
             other_id = raw_input("Enter recipient's other_id: \n")
             cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
-            try: 
+            try:
                 recipient_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(e)
 
-            try: 
+            try:
                 key = (fec_committee_id,other_id)
             except:
                 sys.stderr.write(str(e))
@@ -790,12 +790,12 @@ def similarity_analysis(cursor):
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != key:
                     cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w[0] + "';")
-                    try: 
+                    try:
                         contributor_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
                         handle_error(e)
                     cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w[1] + "';")
-                    try: 
+                    try:
                         recipient_name = cursor.fetchone()[0]
                     except MySQLdb.Error, e:
                         handle_error(e)
@@ -809,21 +809,6 @@ def similarity_analysis(cursor):
         else:
             print "Invalid option."
             break
-
-
-def commit_changes(cursor, sql):
-    try:
-        for q in sql:
-            cursor.execute(q)
-        db.commit()
-    except MySQLdb.Error, e:
-        handle_error(e)
-
-
-def handle_error(e):
-    db.rollback()
-    sys.stderr.write(str(e))
-    sys.exit(1)
 
 
 def usage():
