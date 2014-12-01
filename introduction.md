@@ -1,4 +1,5 @@
 
+
 ### Introduction
 
 Political Action Committees (PACs) must report every donation made to another federal committee to the Federal Election Commission, yet the nature of the relationship between PAC contributors and recipients can be obscure. It is no easy feat to make the jump from the millions of entries in the FEC data to the story told by the contribution history associated with a contributor-recipient pair. A descriptive snapshot of the pair's contribution history would go a long way towards improving accountability of political committee contributions.
@@ -9,13 +10,13 @@ We cannot map all the information associated with a contributor-recipient pair i
 
 ### Data, Tools and Initial Setup
 
-The campaign finance data we use is an enhanced version of three files made available by the FEC, which we assume are uploaded into the database as tables fec_committee_contributions, fec_committees and fec_candidates. [Add links.]
+The campaign finance data we use is an enhanced version of three files made available by the FEC, listing committees, candidates and committee-to-committee transactions (the "itoth" file).
 
 Our tools of choice are the open-source relational database MySQL and the Python library mysqldb. For the sake of convenience, we encapsulate all queries used to compute the scores into a Python script that connects with the database through mysqldb. Code and starter files are available on GitHub along with usage instructions.
 
-The Python scripts assume that the database we're using already contains tables fec_committee_contributions, fec_committees and fec_candidates. These three tables are required in our code.
+The Python scripts assume that the database we're using already contains `fec_committee_contributions`, `fec_committees` and `fec_candidates`.
 
-Before we start querying the database, we tailor the data to our needs in the initial_setup function. To do so, we first add indexes to the `fec_committee_contributions` table and then subset the table based on a specific kind of donation. We are interested in committee-to-committee donations, where committees can be PACs, candidate committees or party committees.
+Before we start querying the database, we tailor the data to our needs in the `initial_setup` function. To do so, we first add indexes to the `fec_committee_contributions` table and then subset the table based on a specific kind of donation. We are interested in committee-to-committee donations, where committees can be PACs, candidate committees or party committees.
 
 To narrow down the data to committee-to-committee donations, we adopt the following constraints:
 
