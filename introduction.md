@@ -1,12 +1,14 @@
 
-#TODO: add name and similarity-writeup
+# Bedfellows
 
 
 ### Introduction
 
-Political Action Committees (PACs) must report every donation made to another federal committee to the Federal Election Commission, yet the nature of the relationship between PAC contributors and recipients can be obscure. It is no easy feat to make the jump from the millions of entries in the FEC data to the story told by the contribution history associated with a contributor-recipient pair. A descriptive snapshot of the pair's contribution history would go a long way towards improving accountability of political committee contributions.
+Political Action Committees (PACs) must report every donation made to another federal committee to the Federal Election Commission, yet the nature of the relationship between PAC contributors and recipients can be obscure. It is no easy feat to make the jump from the millions of entries in the FEC data to the story told by the contribution history associated with a contributor-recipient pair. A descriptive snapshot of the pair's contribution history would go a long way towards improving accountability of political committee contributions. That's where Bedfellows comes in.
 
 To provide a measure of the dynamics of PAC contributions at the level of contributor-recipient pairs, The Upshot's Derek Willis and I envisioned a score that models contributions at that relationship level. The model could be defined any number of ways, but we settled on a score between 0 and 1 assigned to every possible contributor-recipient pair, with 0 signifying that contributor has no association whatsoever with recipient, and a 1 signifying that contributor and recipient are more closely related than any other pair.
+
+Bedfellows is a command-line tool that calculates scores for the donor-recipient relationship and provides a similarity score so users can see donors, recipients and pairs that are most like each other. It is meant to be run locally for data exploration; it is not currently optimized for use as a web application.
 
 We cannot map all the information associated with a contributor-recipient pair into a decimal number between 0 and 1 without first defining how exactly to measure the strength of the affinity of contributor-recipient pairs. These definitions are essentially editorial: as journalists, we rely on our knowledge of the beat to decide which metrics to focus on. What follows is an account of the decision-making process that amounted to the computation of PAC affinity scores.
 
