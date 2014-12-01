@@ -31,9 +31,9 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=sys.argv[2]) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
         if sys.argv[1] == 'overall':
-           main_overall.main(db)
+           overall.main(db)
         elif sys.argv[1] == 'cycle':
-           main_groupedbycycle.main(db)
+           groupedbycycle.main(db)
         else:
            usage()
            sys.exit(1)

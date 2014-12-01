@@ -31,7 +31,7 @@ To narrow down the data to committee-to-committee donations, we adopt the follow
 
 This subset is stored in `fec_contributions`, which is the table all subsequent queries are primarily built on top of. We add indexes to tables `fec_contributions`, `fec_candidates` and `fec_committees` as well as every table we create in the process in order to speed up subsequent queries. Most indexes are added on attributes `fec_committee_id` and `other_id`. Attribute `fec_committee_id` uniquely identifies contributors, whereas other_id uniquely identifies recipients.
 
-The bulk of our code is split into two scripts: `main_overall.py` and `main_groupedbycycle.py`. The former computes overall relationship scores, i.e. scores across all election cycles since 2003, whereas the latter computes scores for each election cycle separately. The `main.py` script invokes one of the two scripts according to the first parameter it receives (either 'overall' or 'cycle'.) The second parameter required is the name of the database where the `fec_candidate_contributions`, `fec_candidates` and `fec_committees` tables are stored.
+The bulk of our code is split into two scripts: `overall.py` and `groupedbycycle.py`. The former computes overall relationship scores, i.e. scores across all election cycles since 2003, whereas the latter computes scores for each election cycle separately. The `main.py` script invokes one of the two scripts according to the first parameter it receives (either 'overall' or 'cycle'.) The second parameter required is the name of the database where the `fec_candidate_contributions`, `fec_candidates` and `fec_committees` tables are stored.
 
 ### The Model
 
