@@ -1,6 +1,7 @@
 
-# Bedfellows
-
+## Bedfellows
+#### A Python library for detailing the relationship between PAC contributors and recipients
+#### Nikolas Iubel
 
 ### Introduction
 
