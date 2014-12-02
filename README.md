@@ -1,7 +1,7 @@
 Bedfellows
 ===================
 
-Bedfellows is a Python library uses Federal Election Commission data of political action committee contributions to other committees to calculate seven scores measuring the length and breadth of the relationship between donors and recipients. It also provides a way to see similar donors, recipients or pairs. It is intended as reporting tool for journalists and researchers interested in campaign finance data.
+Bedfellows is a Python library that uses Federal Election Commission data of political action committee contributions to other committees to calculate seven scores measuring the length and breadth of the relationship between donors and recipients. It also provides a way to see similar donors, recipients or pairs. It is intended as reporting tool for journalists and researchers interested in federal campaign finance data.
 
 Bedfellows is a command-line tool, and requires a local or remote MySQL database (it defaults to local, but users can change the connection string in `main.py`). It also requires three tables from the FEC: candidates, committees and the committee-to-committee transaction file. These files should match the layouts from the FEC with the exception of an additional `cycle` field. Affinity expects these tables to be named fec_candidates, fec_committees and fec_committee_contributions. When computing the scores, Affinity will create a number of tables in the database; most of them are not large.
 
