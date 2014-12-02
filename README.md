@@ -29,7 +29,7 @@ Bedfellows is a command-line application:
 
 Note that it is required that a database containing tables fec_committee_contributions, fec_candidates and fec_committees be specified as the  third parameter.
 
-Script main.py simply calls overall.py or groupedbycycle.py as specified by 2nd paramater (which must be either `overall` or `cycle`).
+The `main.py` file simply calls `overall.py` or `groupedbycycle.py` as specified by the second paramater (which must be either `overall` or `cycle`).
 
 Choosing `overall` will give you the option of computing scores, analyzing existing scores, or both:
 
