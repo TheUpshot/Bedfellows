@@ -1,6 +1,7 @@
 import sys, csv
 import MySQLdb
-import overall, groupedbycycle
+#import overall, groupedbycycle
+
 
 def commit_changes(db, cursor, sql):
     try:
@@ -31,8 +32,10 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         db = MySQLdb.connect(host="localhost", port=3306, user="root",passwd="",db=sys.argv[2]) # make sure db argument matches name of database where fec_committee_contributions.sql is stored
         if sys.argv[1] == 'overall':
+           import overall
            overall.main(db)
         elif sys.argv[1] == 'cycle':
+           import groupedbycycle
            groupedbycycle.main(db)
         else:
            usage()
