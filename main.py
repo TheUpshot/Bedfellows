@@ -1,6 +1,5 @@
 import sys, csv
 import MySQLdb
-#import overall, groupedbycycle
 
 
 def commit_changes(db, cursor, sql):
