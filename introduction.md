@@ -141,7 +141,16 @@ As per our standard normalization method, we store highest score found in table 
 
 #### In Depth
 
-Classification of contributor types is based on the following rules: If committee type is 'X' or 'Y', then contributor is either national party or other party committee. Other party here means state- or local-level committee. We use national parties' FEC IDs to make the distinction as follows: 'C00003418' and 'C00163022' (REPUBLICAN NATIONAL COMMITTEE), 'C00027466' (NATIONAL REPUBLICAN SENATORIAL COMMITTEE), 'C00075820' (NATIONAL REPUBLICAN CONGRESSIONAL COMMITTEE), 'C00000935' (DEMOCRATIC CONGRESSIONAL CAMPAIGN COMMITTEE), 'C00042366' (DEMOCRATIC SENATORIAL CAMPAIGN COMMITTEE), and 'C00010603' (DNC SERVICES CORPORATION/DEMOCRATIC NATIONAL COMMITTEE) are known to be national parties; all others are classified as 'other_party'. If committee type is one of 'N', 'Q', 'F', then contributor is either multicandidate PAC or non-multicandidate PAC. We use attribute 'multiqualify_date' from table fec_committees to distinguish between multicandidate and non-multicandidate PACs. We ignore all contributors associated with other committee types.
+Classification of contributor types is based on the following rules: If committee type is 'X' or 'Y', then contributor is either national party or other party committee. Other party here means state- or local-level committee. We use national parties' FEC IDs to make the distinction as follows:
+
+  * 'C00003418' and 'C00163022' (REPUBLICAN NATIONAL COMMITTEE)
+  * 'C00027466' (NATIONAL REPUBLICAN SENATORIAL COMMITTEE)
+  * 'C00075820' (NATIONAL REPUBLICAN CONGRESSIONAL COMMITTEE)
+  * 'C00000935' (DEMOCRATIC CONGRESSIONAL CAMPAIGN COMMITTEE)
+  * 'C00042366' (DEMOCRATIC SENATORIAL CAMPAIGN COMMITTEE)
+  * 'C00010603' (DNC SERVICES CORPORATION/DEMOCRATIC NATIONAL COMMITTEE)
+
+  are known to be national parties; all others are classified as 'other_party'. If committee type is one of 'N', 'Q', 'F', then contributor is either multicandidate PAC or non-multicandidate PAC. We use attribute 'multiqualify_date' from table fec_committees to distinguish between multicandidate and non-multicandidate PACs. We ignore all contributors associated with other committee types.
 
 Classification of recipient types is based on the following rules: If committee type is one of 'H', 'S', 'P', 'A', 'B' then recipient is a candidate committee. If committee type is 'X' or  'Y' then contributors' rules also apply for recipients. If committee type is one of 'N', 'Q', 'F', 'G', then recipient is a PAC. We ignore all recipients associated with other committee types.
 
