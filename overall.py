@@ -18,13 +18,13 @@ def main(db):
     option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both'\n")
 
     if option == "compute" or option == "both":
-        initial_setup(db, cursor)
-        compute_exclusivity_scores(db, cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
+        #initial_setup(db, cursor)
+        #compute_exclusivity_scores(db, cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
         compute_report_type_scores(db, cursor)                      # 2nd score         # bumps up scores according to how early in election cycle donations were made
-        compute_periodicity_scores(db, cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year
-        compute_maxed_out_scores(db, cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
-        compute_length_scores(db, cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
-        compute_race_focus_scores(db, cursor)                      # 6th score         # bumps up scores according to geographical proximity
+        #compute_periodicity_scores(db, cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year
+        #compute_maxed_out_scores(db, cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
+        #compute_length_scores(db, cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
+        #compute_race_focus_scores(db, cursor)                      # 6th score         # bumps up scores according to geographical proximity
         compute_final_scores(db, cursor)                           # Sum of scores     # computes weighted sum of all scores
 
     if option == "analyze" or option == "both":
@@ -793,7 +793,7 @@ def similarity_analysis(db, cursor):
             sys.exit(1)
 
         elif analysis == "5":
-            # Then, finds final scores by computing the weighted average of the five scores computed above: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores, race_focus_scores.
+            # Then, finds final scores by computing the weighted average of the five scores computed above: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores, length_scores.
             # We start by joining the first four score tables: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores. We handle race_focus_score separately because this table assigns scores to contributors, rather than contributor/recipient pairs as the others.
             # Weights used are as defined in the score_weights table.
             sql = []
@@ -897,15 +897,6 @@ def similarity_analysis(db, cursor):
 
         else:
             break
-
-
-def usage():
-    sys.stderr.write("""
-        Usage:
-        python main.py <Name of Database> \n
-        Example:
-        python main.py fec
-        \n""")
 
 
 if __name__ == "__main__":

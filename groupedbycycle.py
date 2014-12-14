@@ -812,15 +812,6 @@ def similarity_analysis(db, cursor):
             break
 
 
-def usage():
-    sys.stderr.write("""
-        Usage:
-        python main.py <Name of Database> \n
-        Example:
-        python main.py fec
-        \n""")
-
-
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         main(sys.argv[1])
