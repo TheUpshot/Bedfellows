@@ -54,13 +54,14 @@ The choice of scores is of course an editorial decision, one of the several judg
 ### Exclusivity Scores
 
 The idea behind exclusivity scores is to capture the share of the overall amount donated by a contributor that is assigned to each recipient. In other words, the score measures how "exclusive" donations are. If all the money donated by a contributor goes to a single recipient, contributor and recipient are likely to have a stronger relationship than that of pairs in which contributor splits its donations among several recipients.
+
 To compute exclusivity scores, we first find total amount donated by a given contributor across all recipients. Then, for each donation made by a contributor, we compute an exclusivity subscore as the quotient of the donation's amount by the total amount donated across all recipients. We finally compute exclusivity scores by summing over all exclusivity subscores associated with a given pair.
 
 #### Step By Step
 
 The first step in calculating exclusivity scores is computing table `total_donated_by_contributor`, which stores total amounts donated by contributors. To compute these amounts, we simply group donations in the `fec_contributions` table by contributor and then sum up values in the `amount` column.
 
-We then populate the `exclusivity_scores` table by first computing the percentage share associated with each donation and then summing over all donations associated with a given contributor-recipient pair. The percentage share associated with each donation is labeled exclusivity subscore and computed as the quotient between the donation's amount and the total amount donated by contributor from table total_donated_by_contributor. Finally, the exclusivity score is the result of the sum over all exclusivity subscores associated with a given pair.
+We then populate the `exclusivity_scores` table by first computing the percentage share associated with each donation and then summing over all donations associated with a given contributor-recipient pair. The percentage share associated with each donation is labeled exclusivity subscore and computed as the quotient between the donation's amount and the total amount donated by contributor from table `total_donated_by_contributor`. Finally, the exclusivity score is the result of the sum over all exclusivity subscores associated with a given pair.
 
 #### In Depth
 
@@ -84,11 +85,11 @@ Report types are used to compute report type scores as follows: Each report type
 
 The computation of report type scores requires several steps, the first of which is to read into the database a csv file detailing the report type weights to be used in computing report type scores. These weights are stored in the `report_type_weights` table.
 
-Next, we count how many times each report type occurs in the collection of donations associated with each pair. These counts are split by year parity. In other words, we count how often each report type occurs for each contribution-recipient pair in odd years as well as how often they occur for each pair in even years. The goal here is to count the number of donations made at different points of the election cycle. The split by year parity is necessary because federal elections typically take place in even years only, meaning the correspondence between report types and periods of the election cycle differs according to year parity. These counts are stored in the `report_type_count_by_pair` table.
+Next, we count how many times each report type occurs in the collection of donations associated with each pair. These counts are split by year parity. In other words, we count how often each report type occurs for each contribution-recipient pair in odd years as well as how often they occur for each pair in even years. The goal here is to count the number of donations made at different points of the election cycle. The split by year parity is necessary because federal elections typically take place in even years only, meaning the correspondence between report types and periods of the election cycle differs according to year parity. These counts are stored in table `report_type_count_by_pair`.
 
-We then compute how many times each contributor-recipient pair occur in `fec_contributions`, that is, we get a count of donations made by each contributor to each recipient. These counts, which are stored in table pairs_count table, are nothing more than the number of occurrences of each pair in `fec_contributions`.
+We then compute how many times each contributor-recipient pair occur in `fec_contributions`, that is, we get a count of donations made by each contributor to each recipient. These counts, which are stored in table `pairs_count table`, are nothing more than the number of occurrences of each pair in `fec_contributions`.
 
-Once equipped with these two counts, we compute report type frequencies: how often each report type occurs in donations associated with each pair. These frequencies are simply the quotient between each report type count (from  `report_type_count_by_pair`) and pair count (from table pairs_count.) We store the results in the `report_type_frequency` table.
+Once equipped with these two counts, we compute report type frequencies: how often each report type occurs in donations associated with each pair. These frequencies are simply the quotient between each report type count (from  `report_type_count_by_pair`) and pair count (from table `pairs_count`.) We store the results in the `report_type_frequency` table.
 
 The next step is to compute report type subscores for each combination of contribution-recipient pair and report type present in `fec_contributions`. These subscores are simply the product of the frequency of each report type (from `report_type_frequency`) and the corresponding weights stored in the `report_type_weight` table.
 
@@ -99,9 +100,10 @@ The `max_report_type_score` table simply finds the maximum score in table `unnor
 At last, we arrive at the final report type scores by normalizing scores in `unnormalized_report_type_scores`. Normalization is achieved by dividing all scores by maximum score stored in `max_report_type_score`. This way we ensure that scores fall in a scale from 0 to 1.
 
 #### In Depth
+
 One could argue a more objective measure of time such as date is to be preferred over report type for the purposes of pinpointing how early in the election cycle a donation is made, especially seeing as date is an attribute readily available in table fec_contributions. We choose to go with report types because they provide for a convenient grouping of donations made around the same time but not quite on the same date. Had we used date for this analysis, we would have had to come up with a method for clustering dates. If we look at report types as FEC-sanctioned clusters, it follows that we favored using a method already in place over devising a new one.
 
-In fact, even report types are too granular a measure for our purposes, so much so that we grouped similar ones together in the process of assigning them weights. For instance, a weight of 1 is assigned to report types 12C, 12G, 12P, 12R, 12S, 30G, 30R, 30S in both even and odd years, and MY, M7, M8, M9, M10, M11 and M12 in even years. These report types represent donations made within a few months of Election Day. The goal is to differentiate between donations made very early in the election cycle, which get a weight of 4, and donations made towards the end of the campaign, which get a score of 1. Scores of 2 and 3 are assigned for donations in between. File report_types.csv lists the weight assigned to each report type score. Weight assignments are of course an editorial decision and as such are subject to criticism.
+In fact, even report types are too granular a measure for our purposes, so much so that we grouped similar ones together in the process of assigning them weights. For instance, a weight of 1 is assigned to report types 12C, 12G, 12P, 12R, 12S, 30G, 30R, 30S in both even and odd years, and MY, M7, M8, M9, M10, M11 and M12 in even years. These report types represent donations made within a few months of Election Day. The goal is to differentiate between donations made very early in the election cycle, which get a weight of 4, and donations made towards the end of the campaign, which get a score of 1. Scores of 2 and 3 are assigned for donations in between. File `report_types.csv` lists the weight assigned to each report type score, which can easily be changed. Weight assignments are of course an editorial decision and as such are subject to criticism.
 
 ### Periodicity Scores
 
@@ -112,7 +114,7 @@ We now expand on the case when standard deviation is zero. We note that if the s
 
 #### Step By Step
 
-Unlike the previous scores, there is no need to compute several tables before actually computing the unnormalized scores. A single query on `fec_contributions` does the trick.
+Unlike the previous scores, there is no need to compute several tables before actually computing the unnormalized scores. A single query on table `fec_contributions` does the trick.
 
 We compute unnormalized periodicity scores as follows: first, we group donations by contributor-recipient pairs; then, we map donation dates to a 'day of year' measure through MySQL's DAYOFYEAR function; finally, we evaluate the standard deviation of the resulting data points. If standard deviation is zero, we look at the number of distinct data points that was used to compute the variance: if data is made up of a single data point, assign a periodicity score of 0, otherwise assign a score of 1. If standard deviation isn't zero, then periodicity score is the value of the inverse of standard deviation. Results are stored in `unnormalized_periodicity_scores`.
 
@@ -131,11 +133,11 @@ To compute maxed out scores, we first identify contributor and recipient types a
 
 #### Step By Step
 
-We start by computing `contributor_types`, which assigns a 'contributor_type' value to each contributor in table fec_contributions. Contributor types are one of 'national_party', 'other_party', 'multi_pac' and 'non_multi_pac'. Likewise, we compute table recipient_types to assign a 'recipient_type' value to each recipient in table fec_contributions. Recipient types are one of 'national_party', 'other_party', 'pac', 'candidate'. See the 'In Depth' section below for a detailed explanation of assignment rules.
+We start by computing contributor types, which assigns a 'contributor_type' value to each contributor in table `fec_contributions`. Contributor types are one of 'national_party', 'other_party', 'multi_pac' and 'non_multi_pac'. Likewise, we compute table `recipient_types` to assign a 'recipient_type' value to each recipient in table `fec_contributions`. Recipient types are one of 'national_party', 'other_party', 'pac', 'candidate'. See the 'In Depth' section below for a detailed explanation of assignment rules.
 
-We then create table contribution_limits by reading file limits.csv into the database. This file contains FEC-regulated contribution limits for each possible combination of contributor and recipient types. Next, we join  `contributor_types`, `recipient_types` and `fec_contributions` into `joined_contr_recpt_types`. This join associates each donation with a contributor type and a recipient type.
+We then create table contribution_limits by reading file `limits.csv` into the database. This file contains FEC-regulated contribution limits for each possible combination of contributor and recipient types. Next, we join  `contributor_types`, `recipient_types` and `fec_contributions` into `joined_contr_recpt_types`. This join associates each donation with a contributor type and a recipient type.
 
-We're now ready to associate each donation with a contribution limit based on contributor and recipient types from table joined_contr_recpt_types and contribution limits from `contribution_limits`. We do that in  `maxed_out_subscores`, which computes the percentage share of contribution limit represented by each donation. Maxed out subscore is, in other words, the quotient between donation amount and contribution limit. Finally, we compute unnormalized maxed out scores for each contributor-recipient pair by summing over all subscores associated with a pair. The table `unnormalized_maxed_out_scores` stores these results.
+We're now ready to associate each donation with a contribution limit based on contributor and recipient types from table `joined_contr_recpt_types` and contribution limits from `contribution_limits`. We do that in  `maxed_out_subscores`, which computes the percentage share of contribution limit represented by each donation. Maxed out subscore is, in other words, the quotient between donation amount and contribution limit. Finally, we compute unnormalized maxed out scores for each contributor-recipient pair by summing over all subscores associated with a pair. The table `unnormalized_maxed_out_scores` stores these results.
 
 As per our standard normalization method, we store highest score found in table `max_maxed_out_score` and then compute maxed out scores as the quotient between unnormalized scores and highest score found. Results are stored in  `maxed_out_scores`.
 
@@ -160,11 +162,12 @@ The length score too has an intuitive premise: The longer the relationship betwe
 
 #### Step By Step
 
-We first compute unnormalized length scores as the difference between the first and the last date of donations in record, measured in days. This is readily accomplished with MySQL's DATEDIFF function. The unnormalized scores are stored in `unnormalized_length_scores`. We then normalize scores by first storing the highest value found in table max_length_score and then dividing all unnormalized scores by the highest value. Normalized scores are stored in `length_scores`.
+We first compute unnormalized length scores as the difference between the first and the last date of donations in record, measured in days. This is readily accomplished with MySQL's DATEDIFF function. The unnormalized scores are stored in `unnormalized_length_scores`. We then normalize scores by first storing the highest value found in table `max_length_score` and then dividing all unnormalized scores by the highest value. Normalized scores are stored in `length_scores`.
 
 #### In Depth
 
 The scoring model we developed doesn't explicitly reward pairs in proportion to the absolute number of corresponding donations. Rather, the model seeks to flesh out patterns surrounding these contributions, namely periodicity, exclusivity and length of relationship as well as the timing of donations in the context of election cycles, the relative donation value with respect to the limit allowed by FEC and contributor's focus on specific races.
+
 While there isn't a score explicitly devoted to rewarding multiple donations over one-time ones, we do acknowledge that both periodicity and length scores indirectly produce this side effect, as one-time donations necessarily get a periodicity score and a length score of zero. This is meant to counter-balance the relative easiness with which one-time donations can get high values for the other scores. One-time donations will get a high report type score as long as the donation is made early in the election cycle; they will get a high maxed out score as long as donation is close to contribution limit. Moreover, if contributor doesn't donate to other recipients, exclusivity and race focus score will necessarily be 1.
 
 ### Race Focus Scores
@@ -175,7 +178,8 @@ Unlike the other five scores, race focus scores is assigned to each contributor 
 
 #### Step By Step
 
-The first step is to compile a list of all races associated with donations in table 'fec_contributions'. We define race as a unique combination of the following attributes: district, office state, branch and cycle. (Think about it: No two races will map into the same combination of these four attributes.) We store the results in `races_list`.
+The first step is to compile a list of all races associated with donations in table `fec_contributions`. We define race as a unique combination of the following attributes: district, office state, branch and cycle. (Think about it: No two races will map into the same combination of these four attributes.) We store the results in `races_list`.
+
 Now that we have a list of races associated with donations in the data, we count how many races each contributor is affiliated with, where affiliation means contributor donates to a recipient partaking in a race. We let race focus scores be the inverse of this count. The table `race_focus_scores` stores these results. This methodology necessarily constrains values within the [0,1] range, which removes the need to normalize values at the end as before.
 
 #### In Depth
@@ -187,18 +191,18 @@ It is worth noting that the query used to compile a list of races relies on a re
 The final step is to combine the six scores computed (i.e. exclusivity scores, report type scores, periodicity scores, maxed out scores, length scores, and race focus scores) into a unique, final score. We accomplish this by joining the various scores tables and computing a weighted average of the scores, where weights are arbitrarily pre-determined.
 
 #### Step By Step
-We start by reading score weights to be attributed to each of the six scores from the CSV file 'score_weights.csv' and storing them in `score_weights`. We then join the first five scores (all except race focus scores) on attributes `fec_committee_id` and `other_id`. Recall that `fec_committee_id` uniquely identifies contributors and `other_id` uniquely identifies recipients. These five scores are attributed to contributor-recipient pairs. The weighted average of these five scores is stored in `five_scores`.
+
+We start by reading score weights to be attributed to each of the six scores from the CSV file `score_weights.csv` and storing them in `score_weights`. We then join the first five scores (all except race focus scores) on attributes `fec_committee_id` and `other_id`. Recall that `fec_committee_id` uniquely identifies contributors and `other_id` uniquely identifies recipients. These five scores are attributed to contributor-recipient pairs. The weighted average of these five scores is stored in `five_scores`.
 
 Race focus scores, on the other hand, are attributed to contributors only, so we separately join partial scores from `five_scores` and `race_focus_scores` on attribute `fec_committee_id`. This means all contributor-recipient pairs associated with the same recipient are assigned the same race focus scores in the computation of the final score. The final result in stored in the `final_scores` table.
 
 ### Similarity Scores
 
-Now that we have computed final scores for each contributor-recipient pair in table 'fec_contributions', the next step is to make sense of the results. 
+Now that we have computed final scores for each contributor-recipient pair in table `fec_contributions`, the next step is to make sense of the results. 
 
 To interpret the scores, we look for similarities in the distribution of scores across all pairs. With all the scores in hand, we are empowered to determine, for instance, what contributors are most similar to each other in terms of campaign contribution patterns. The rationale is that contributors with similar score distributions exhibit similar campaign donation behavior. (The same rationale applies to recipients and contribution-recipient pairs.)
 
 In order to perform this similarity analysis, we rely on a vector-based metric known as cosine similarity. We first associate each contributor, recipient and pair with a vector of scores. We then measure how similar two contributors are by computing the cosine of the angle between them, which we take to be the similarity score associated with the two contributors. (Again, the recipient and contributor-recipient pair cases are analogous.)
-
 
 #### Step By Step
 
@@ -206,12 +210,11 @@ To measure similarity between contributors and between recipients, we first need
 
 In the case of contributors and recipients, we start off by computing the weighted adjacency matrix associated with all contributors and recipients. This is matrix in which each row corresponds to a contributor and each column corresponds to a recipient. A corollary follows from this definition: Each matrix entry is associated with a contributor-recipient pair. We therefore compute the matrix by simply assigning to each entry the final score associated with the corresponding pair. Since each contributor corresponds to a row, a contributor's vector representation is simply the corresponding row vector of scores. Likewise, each recipient's vector representation comes from the corresponding column vector.
 
-In the case of contributor-recipient pairs, the vector representation is as follows: Each pair is described as a vector of the six scores associated with the pair, (namely, exclusivity, report type, periodicity, maxed out, race focus, length scores). We store these vectors in a dictionary named 'pair_score_map'.
+In the case of contributor-recipient pairs, the vector representation is as follows: Each pair is described as a vector of the six scores associated with the pair, (namely, exclusivity, report type, periodicity, maxed out, race focus, length scores). We store these vectors in a dictionary named `pair_score_map`.
 
 After computing vector representations of contributors, recipients and contributor-recipient pairs, we ask the user what kind of similarity analysis she is interested in performing. The options are: 1. Find contributors similar to a given contributor, 2. Find recipients similar to a given recipient, 3. Find pairs similar to a given pair. Should user select option 1, she is asked to input the id of the contributor for which she would like to find the most similar contributors. Analogously, she is asked to input a recipient's id if she selects option 2. For option 3, she is required to enter the id's of contributor and recipient that make up the pair.
 
 Finally, we compute cosine similarity scores between the vector representing the contributor entered as input and each of the vectors representing every other contributor. Cosine similarity is computed as the normalized dot product between the two vectors. We then order the cosine similarity scores we found in decreasing order. The list of the top ten contributors most similar to the contributor entered as input is simply the contributors corresponding to the ten highest cosine similarity scores. The process for finding recipients most similar to a given recipient and pairs most similar to a pair is analogous.
-
 
 #### In Depth
 
