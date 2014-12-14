@@ -11,7 +11,7 @@ To provide a measure of the dynamics of PAC contributions at the level of contri
 
 Bedfellows is a command-line tool that calculates scores for the donor-recipient relationship and provides a similarity score so users can see donors, recipients and pairs that are most like each other. It is meant to be run locally for data exploration; it is not currently optimized for use as a web application.
 
-We cannot map all the information associated with a contributor-recipient pair into a decimal number between 0 and 1 without first defining how exactly to measure the strength of the affinity of contributor-recipient pairs. These definitions are essentially editorial: as journalists, we rely on our knowledge of the beat to decide which metrics to focus on. What follows is an account of the decision-making process that amounted to the computation of PAC affinity scores.
+We cannot map all the information associated with a contributor-recipient pair into a decimal number between 0 and 1 without first defining how exactly to measure the strength of the affinity of contributor-recipient pairs. These definitions are essentially editorial: As journalists, we rely on our knowledge of the beat to decide which metrics to focus on. What follows is an account of the decision-making process that amounted to the computation of PAC affinity scores.
 
 ### Data, Tools and Initial Setup
 
@@ -21,7 +21,7 @@ Our tools of choice are the open-source relational database MySQL and the Python
 
 The Python scripts assume that the database we're using already contains `fec_committee_contributions`, `fec_committees` and `fec_candidates`.
 
-Before we start querying the database, we tailor the data to our needs in the `initial_setup` function. To do so, we first add indexes to the `fec_committee_contributions` table and then subset the table based on a specific kind of donation. We are interested in committee-to-committee donations, where committees can be PACs, candidate committees or party committees.
+Before we start querying the database, we tailor the data to our needs in functions `initial_setup` and `setup_initial_indexes`. To do so, we first add indexes to table `fec_committee_contributions` and then subset the table based on a specific kind of donation. We are interested in committee-to-committee donations, where committees can be PACs, candidate committees or party committees.
 
 To narrow down the data to committee-to-committee donations, we adopt the following constraints:
 
@@ -36,9 +36,9 @@ The bulk of our code is split into two scripts: `overall.py` and `groupedbycycle
 
 ### The Model
 
-What matters most in defining how invested contributors are in a campaign: the length of the relationship with donation recipients, or the amount donated? The number or the timing of donations? Absolute or relative number of donations? What exactly do we mean by timing anyway â€“ are we talking about how often or how early they occur? These questions raise a fundamental point: no single metric will single-handedly describe the affinity between contributors and donors.
+What matters most in defining how invested contributors are in a campaign: the length of the relationship with donation recipients, or the amount donated? The number or the timing of donations? Absolute or relative number of donations? What exactly do we mean by timing anyway - are we talking about how often or how early they occur? These questions raise a fundamental point: No single metric will single-handedly describe the affinity between contributors and donors.
 
-Our method is to combine several metrics into the relationship score. Not only does this strategy encompass a number of ways in which the strength of the relationship can manifest itself, it also increases the robustness of the score. But a core question remains: what exactly should these metrics be? The following is the list of metrics we have decided to incorporate into the scores. The hope is that most if not all of them are intuitive measures.
+Our method is to combine several metrics into the relationship score. Not only does this strategy encompass a number of ways in which the strength of the relationship can manifest itself, it also increases the robustness of the score. But a core question remains: What exactly should these metrics be? The following is the list of metrics we have decided to incorporate into the scores. The hope is that most if not all of them are intuitive measures.
 
 1.     Length of the relationship is an obvious first pick: The longer contributor has donated, the stronger a relationship it has with recipient. This metric is captured in the length score.
 2.     Timing of donations also matters: The earlier in the election cycle a contributor donates to a campaign, the stronger a commitment to the campaign it displays. Uncertainty about a campaign's prospects is higher early in the election cycle. The scores of early donations are bumped up through the report type score.
@@ -129,6 +129,7 @@ On a separate note, we acknowledge that our method for computing periodicity sco
 ### Maxed Out Scores
 
 The rationale behind maxed out scores is very intuitive: Contributors have a stronger relationship with recipients to which they donate the maximum amount allowed under FEC regulations than with recipients that receive less than the contribution limit. Maxed out scores reward maxed out donations associated with a contributor-recipient pair.
+
 To compute maxed out scores, we first identify contributor and recipient types and then assign a contribution limit to each contributor-recipient pair according to FEC rules. We then compute the value of each donation as a percentage share of the contribution limit associated with each pair. Finally, we add up percentage shares from all donations associated with a pair to arrive at an unnormalized score. The usual normalization procedure then ensues.
 
 #### Step By Step
