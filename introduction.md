@@ -19,7 +19,7 @@ The campaign finance data we use is an enhanced version of three files made avai
 
 Our tools of choice are the open-source relational database MySQL and the Python library mysqldb. For the sake of convenience, we encapsulate all queries used to compute the scores into a Python script that connects with the database through mysqldb. Code and starter files are available on GitHub along with usage instructions.
 
-The Python scripts assume that the database we're using already contains `fec_committee_contributions`, `fec_committees` and `fec_candidates`.
+The Python scripts assume that the database we're using already contains tables `fec_committee_contributions`, `fec_committees` and `fec_candidates`.
 
 Before we start querying the database, we tailor the data to our needs in functions `initial_setup` and `setup_initial_indexes`. To do so, we first add indexes to table `fec_committee_contributions` and then subset the table based on a specific kind of donation. We are interested in committee-to-committee donations, where committees can be PACs, candidate committees or party committees.
 
@@ -49,7 +49,7 @@ Our method is to combine several metrics into the relationship score. Not only d
 
 One could argue than an obvious metric is missing from this list: a simple count of the number of donations associated with each contributor-recipient pair. This is done on purpose, as we're more concerned about the patterns surrounding donations than the number of donations per se. The count is embedded in the computation of several of these scores, notably periodicity scores and length scores, which are assigned a value of 0 in the event of one-time donations.
 
-The choice of scores is of course an editorial decision, one of the several judgment calls that factor into the design of an algorithm of this kind. We hope to make this analysis accountable by disclosing the editorial decisions embedded in the algorithm design.
+The choice of scores is of course an editorial decision, one of the several judgment calls that factor into the design of an algorithm of this kind. We hope to make this analysis accountable by disclosing the editorial decisions embedded in the algorithm design as well as providing Bedfellows users with full control over parameters of the scoring model.
 
 ### Exclusivity Scores
 
@@ -101,11 +101,11 @@ At last, we arrive at the final report type scores by normalizing scores in `unn
 
 #### In Depth
 
-One could argue a more objective measure of time such as date is to be preferred over report type for the purposes of pinpointing how early in the election cycle a donation is made, especially seeing as date is an attribute readily available in table `fec_contributions`. We choose to go with report types because they provide for a convenient grouping of donations made around the same time but not quite on the same date. Had we used date for this analysis, we would have had to come up with a method for clustering dates, whereas report types are, in a way, FEC-sanctioned clusters already in place. We favored using an existing FEC-sanctioned clustering method over devising a new one.
+One could argue a more objective measure of time such as date is to be preferred over report type for the purposes of pinpointing how early in the election cycle a donation is made, especially seeing as date is an attribute readily available in table `fec_contributions`. We choose to go with report types because they provide for a convenient grouping of donations made around the same time but not quite on the same date. Had we used date for this analysis, we would have had to come up with a method for clustering dates. Report types, on the other hand, are FEC-sanctioned clusters already in place. We favored using an existing FEC-sanctioned clustering method over devising a new one.
 
 As a matter of fact, even report types are too granular a measure of time for our purposes, so much so that we grouped similar ones together in the process of assigning them weights. For instance, a weight of 1 is assigned to report types 12C, 12G, 12P, 12R, 12S, 30G, 30R, 30S in both even and odd years, and MY, M7, M8, M9, M10, M11 and M12 in even years. These report types represent donations made within a few months of Election Day. The goal is to differentiate between donations made very early in the election cycle, which get a weight of 4, and donations made towards the end of the campaign, which get a score of 1. Scores of 2 and 3 are assigned for donations in between. 
 
-File `report_types.csv` lists the weight assigned to each report type score. These weight assignments are of course an editorial decision. We thus emphasize that Bedfellows users can easily change these weights by editing the csv file. Bedfellows users are given full control over parameters of the model.
+File `report_types.csv` lists the weight assigned to each report type score. These weight assignments are of course an editorial decision. We thus emphasize that Bedfellows users can easily change these weights by editing the csv file. 
 
 
 ### Periodicity Scores
@@ -120,15 +120,15 @@ We now expand on the case when standard deviation is zero. We note that if the s
 
 Unlike the previous scores, there is no need to compute several tables before actually computing the unnormalized scores. A single query on table `fec_contributions` does the trick.
 
-We compute unnormalized periodicity scores as follows: first, we group donations by contributor-recipient pairs; then, we map donation dates to a 'day of year' measure through MySQL's DAYOFYEAR function; finally, we evaluate the standard deviation of the resulting data points. If standard deviation is zero, we look at the number of distinct data points that was used to compute the variance: if data is made up of a single data point, assign a periodicity score of 0, otherwise assign a score of 1. If standard deviation isn't zero, then periodicity score is the value of the inverse of standard deviation. Results are stored in `unnormalized_periodicity_scores`.
+We compute unnormalized periodicity scores as follows: First, we group donations by contributor-recipient pairs; then, we map donation dates to a 'day of year' measure through MySQL's DAYOFYEAR function; finally, we evaluate the standard deviation of the resulting data points. If standard deviation is zero, we look at the number of distinct data points that was used to compute the variance: If data is made up of a single data point, we assign a periodicity score of 0, otherwise we assign a score of 1. If standard deviation isn't zero, then periodicity score is the value of the inverse of standard deviation. Results are stored in `unnormalized_periodicity_scores`.
 
-The same normalization strategy used before is applied here: we compute values in `periodicity_scores` as the quotient between unnormalized scores in `unnormalized_periodicity_scores` and the maximum periodicity score value stored in `max_periodicity_score`.
+The same normalization strategy used before is applied here. We compute values in `periodicity_scores` as the quotient between unnormalized scores in `unnormalized_periodicity_scores` and the maximum periodicity score value stored in `max_periodicity_score`.
 
 #### In Depth
 
 Leap years introduce a slight imprecision in our periodicity score calculation. For dates from March to December, the value returned by MySQL's DAYOFYEAR function for dates in leap years exceeds by one unit the value returned for the same date in a non-leap year. As a result, a pair of donations made on the same day of the year in different years such that one but not the other is a leap year is treated as donations made a day apart from each other. They will be treated as distinct data points even though they refer to the same date. Because variance in this case is very low and so periodicity score is very close to 1 anyway, we let this slide.
 
-On a separate note, we acknowledge that our method for computing periodicity scores may fail to adequately capture the periodical pattern of multimodal data points. If a contributor donates to a given recipient, say, every 4 months, the dataset that results from mapping donation dates into the day-of-year measure will be multimodal; as a result, standard deviation is difficult to interpret. [Makes sense in theory, but I wonder if this multimodal pattern occurs in the data at all. Check!]
+On a separate note, we acknowledge that our method for computing periodicity scores may fail to adequately capture the periodical pattern of multimodal data points. If a contributor donates to a given recipient, say, every 4 months, the dataset that results from mapping donation dates into the day-of-year measure will be multimodal; as a result, standard deviation is difficult to interpret. 
 
 ### Maxed Out Scores
 
@@ -140,7 +140,7 @@ To compute maxed out scores, we first identify contributor and recipient types a
 
 We start by computing contributor types, which assigns a 'contributor_type' value to each contributor in table `fec_contributions`. Contributor types are one of 'national_party', 'other_party', 'multi_pac' and 'non_multi_pac'. Likewise, we compute table `recipient_types` to assign a 'recipient_type' value to each recipient in table `fec_contributions`. Recipient types are one of 'national_party', 'other_party', 'pac', 'candidate'. See the 'In Depth' section below for a detailed explanation of assignment rules.
 
-We then create table contribution_limits by reading file `limits.csv` into the database. This file contains FEC-regulated contribution limits for each possible combination of contributor and recipient types. Next, we join `contributor_types`, `recipient_types` and `fec_contributions` into `joined_contr_recpt_types`. This join associates each donation with a contributor type and a recipient type.
+We then create table `contribution_limits` by reading file `limits.csv` into the database. This file contains FEC-regulated contribution limits for each possible combination of contributor and recipient types. Next, we join `contributor_types`, `recipient_types` and `fec_contributions` into `joined_contr_recpt_types`. This join associates each donation with a contributor type and a recipient type.
 
 We're now ready to associate each donation with a contribution limit based on contributor and recipient types from table `joined_contr_recpt_types` and contribution limits from `contribution_limits`. We do that in `maxed_out_subscores`, which computes the percentage share of contribution limit represented by each donation. Maxed out subscore is, in other words, the quotient between donation amount and contribution limit. Finally, we compute unnormalized maxed out scores for each contributor-recipient pair by summing over all subscores associated with a pair. The table `unnormalized_maxed_out_scores` stores these results.
 
