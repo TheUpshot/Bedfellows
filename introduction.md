@@ -159,21 +159,21 @@ Classification of recipient types is based on the following rules: If committee 
 
 ### Length Scores
 
-The length score too has an intuitive premise: The longer the relationship between contributor and recipient lasts, the stronger their relationship is. We want to reward pairs that exhibit a long-lasting relationship between contributors and recipients. Length scores are simply the number of days passed between the first and the last donation associated with a contributor-recipient pair. We normalize the scores by assigning a score of 1 to the highest-scoring pair and scaling others accordingly.
+The length score too has an intuitive premise: The longer the relationship between contributor and recipient lasts, the stronger their relationship is. We want to reward pairs that exhibit a long-lasting relationship between contributors and recipients. We measure length of relationship by counting the number of days passed between the first and the last donation associated with a contributor-recipient pair. We then normalize these counts by assigning a score of 1 to the highest-scoring pair and scaling others accordingly.
 
 #### Step By Step
 
-We first compute unnormalized length scores as the difference between the first and the last date of donations in record, measured in days. This is readily accomplished with MySQL's DATEDIFF function. The unnormalized scores are stored in `unnormalized_length_scores`. We then normalize scores by first storing the highest value found in table `max_length_score` and then dividing all unnormalized scores by the highest value. Normalized scores are stored in `length_scores`.
+We first compute unnormalized length scores as the difference between the first and the last date of donations on record, measured in days. This is readily accomplished with MySQL's DATEDIFF function. The unnormalized scores are stored in `unnormalized_length_scores`. We then normalize scores by first storing the highest value found in table `max_length_score` and then dividing all unnormalized scores by the highest value. Normalized scores are stored in `length_scores`.
 
 #### In Depth
 
-The scoring model we developed doesn't explicitly reward pairs in proportion to the absolute number of corresponding donations. Rather, the model seeks to flesh out patterns surrounding these contributions, namely periodicity, exclusivity and length of relationship as well as the timing of donations in the context of election cycles, the relative donation value with respect to the limit allowed by FEC and contributor's focus on specific races.
+The scoring model we developed doesn't explicitly reward pairs in proportion to the absolute number of corresponding contributions. Rather, the model seeks to flesh out patterns surrounding these contributions, namely periodicity, exclusivity and length of relationship as well as the timing of donations in the context of election cycles, the relative donation value with respect to the limit allowed by FEC and contributor's focus on specific races.
 
 While there isn't a score explicitly devoted to rewarding multiple donations over one-time ones, we do acknowledge that both periodicity and length scores indirectly produce this side effect, as one-time donations necessarily get a periodicity score and a length score of zero. This is meant to counter-balance the relative easiness with which one-time donations can get high values for the other scores. One-time donations will get a high report type score as long as the donation is made early in the election cycle; they will get a high maxed out score as long as donation is close to contribution limit. Moreover, if contributor doesn't donate to other recipients, exclusivity and race focus score will necessarily be 1.
 
 ### Race Focus Scores
 
-The motivation for this score is that contributors that give to recipients within a single race should see a bump in their relationship scores. Contributors that donate to races all over the country are not as invested in each particular race as contributors that focus on specific races. We compute race focus scores as the inverse of the count of the number of races a contributor donates to. Normalization is not necessary in this case.
+The motivation for this score is that contributors that give to recipients within a single race should see a bump in their relationship scores. Contributors that donate to races all over the country are not as invested in each particular race as are contributors that focus on specific races. We compute race focus scores as the inverse of the count of the number of races a contributor donates to. Normalization is not necessary in this case.
 
 Unlike the other five scores, race focus scores is assigned to each contributor only, (as opposed to contributor-recipient pairs.)
 
@@ -181,7 +181,7 @@ Unlike the other five scores, race focus scores is assigned to each contributor 
 
 The first step is to compile a list of all races associated with donations in table `fec_contributions`. We define race as a unique combination of the following attributes: district, office state, branch and cycle. (Think about it: No two races will map into the same combination of these four attributes.) We store the results in `races_list`.
 
-Now that we have a list of races associated with donations in the data, we count how many races each contributor is affiliated with, where affiliation means contributor donates to a recipient partaking in a race. We let race focus scores be the inverse of this count. The table `race_focus_scores` stores these results. This methodology necessarily constrains values within the [0,1] range, which removes the need to normalize values at the end as before.
+Now that we have a list of races associated with donations in the data, we count how many races each contributor is affiliated with, where affiliation means contributor donates to a recipient partaking in a race. We let race focus scores be the inverse of this count. Table `race_focus_scores` stores these results. This methodology necessarily constrains values within the [0,1] range, which removes the need to normalize values at the end as before.
 
 #### In Depth
 
@@ -191,9 +191,11 @@ It is worth noting that the query used to compile a list of races relies on a re
 
 The final step is to combine the six scores computed (i.e. exclusivity scores, report type scores, periodicity scores, maxed out scores, length scores, and race focus scores) into a unique, final score. We accomplish this by joining the various scores tables and computing a weighted average of the scores, where weights are arbitrarily pre-determined.
 
+We once again point out that Bedfellows allows users to easily change the parameters of the model if they so desire. Users can change the weights used in the computation of final scores simply by editing file `score_weights.csv`.
+
 #### Step By Step
 
-We start by reading score weights to be attributed to each of the six scores from the CSV file `score_weights.csv` and storing them in `score_weights`. We then join the first five scores (all except race focus scores) on attributes `fec_committee_id` and `other_id`. Recall that `fec_committee_id` uniquely identifies contributors and `other_id` uniquely identifies recipients. These five scores are attributed to contributor-recipient pairs. The weighted average of these five scores is stored in `five_scores`.
+We start by reading score weights to be attributed to each of the six scores from the CSV file `score_weights.csv` and storing them in table `score_weights`. We then join the first five scores (all except race focus scores) on attributes `fec_committee_id` and `other_id`. Recall that `fec_committee_id` uniquely identifies contributors and `other_id` uniquely identifies recipients. These five scores are attributed to contributor-recipient pairs. The weighted average of these five scores is stored in `five_scores`.
 
 Race focus scores, on the other hand, are attributed to contributors only, so we separately join partial scores from `five_scores` and `race_focus_scores` on attribute `fec_committee_id`. This means all contributor-recipient pairs associated with the same recipient are assigned the same race focus scores in the computation of the final score. The final result in stored in the `final_scores` table.
 
