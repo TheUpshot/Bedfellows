@@ -683,9 +683,6 @@ def similarity_analysis(db, cursor):
         cycles_list = cursor.fetchall()
     except MySQLdb.Error, e:
         handle_error(db, e)
-    print "-----"
-    print cycles_list
-    print "-----"
     while True:
         cycle = raw_input("Enter election cycle you want to query for: \n")
         if [i for i in cycles_list if i[0] == cycle]:           
