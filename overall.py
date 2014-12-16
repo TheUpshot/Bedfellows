@@ -2,29 +2,27 @@ import csv, sys
 from sys import stdout
 from pandas import *
 import MySQLdb
+import numpy as np
+
 from main import commit_changes, handle_error
 
-import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-from sklearn.feature_selection import SelectKBest
-
 INFINITY = 9999999999999
+
 
 def main(db):
     cursor = db.cursor()
     print "Overall scores"
 
-    option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both'\n")
+    option = raw_input("Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both'.\n")
 
     if option == "compute" or option == "both":
-        #initial_setup(db, cursor)
-        #compute_exclusivity_scores(db, cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
+        initial_setup(db, cursor)
+        compute_exclusivity_scores(db, cursor)                     # 1st score         # bumps up scores of donations made exclusively to a given recipient
         compute_report_type_scores(db, cursor)                      # 2nd score         # bumps up scores according to how early in election cycle donations were made
-        #compute_periodicity_scores(db, cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year
-        #compute_maxed_out_scores(db, cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
-        #compute_length_scores(db, cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
-        #compute_race_focus_scores(db, cursor)                      # 6th score         # bumps up scores according to geographical proximity
+        compute_periodicity_scores(db, cursor)                     # 3rd score         # bumps up scores if donations are made around the same time of the year
+        compute_maxed_out_scores(db, cursor)                       # 4th score         # bumps up scores if contributors maxed out on donations to corresponding recipient
+        compute_length_scores(db, cursor)                           # 5th score         # bumps up scores if contributor has been donating to recipient for a long time
+        compute_race_focus_scores(db, cursor)                      # 6th score         # bumps up scores according to geographical proximity
         compute_final_scores(db, cursor)                           # Sum of scores     # computes weighted sum of all scores
 
     if option == "analyze" or option == "both":
@@ -77,6 +75,7 @@ def initial_setup(db, cursor):
         handle_error(db, e)
     print "Initial setup done"
 
+
 def setup_initial_indexes(db, cursor):
     sql = []
     sql.append("ALTER TABLE fec_contributions ADD INDEX pair_report_type (fec_committee_id, other_id, report_type);")
@@ -90,6 +89,7 @@ def setup_initial_indexes(db, cursor):
     sql.append("ALTER TABLE fec_committees ADD INDEX cycle (cycle);")
     sql.append("ALTER TABLE fec_candidates ADD INDEX combo (fecid, name, district, office_state, branch, cycle);")
     commit_changes(db, cursor, sql)
+
 
 def compute_exclusivity_scores(db, cursor):
     # First, computes total amount donated by a given PAC contributor across all recipients.
@@ -691,7 +691,7 @@ def similarity_analysis(db, cursor):
     while (True):
         # Ask user to input kind of similarity analysis to be performed.
         # Options: 1. Find contributors similar to a given contributor, 2. Find recipients similar to a given recipient, 3. Find pairs similar to a given pair.
-        analysis = raw_input("What kind of similarity analysis are you interested in? Type the number representing any of the following: \n 1. Find contributors similar to a given contributor. \n 2. Find recipients similar to a given recipient. \n 3. Find pairs similar to a given pair. \n Bedfellows is currently set to display a list of top " + RANK_THRESHOLD + " results. If you would like to change this setting, type 4. \n Type anything else to exit. \n")
+        analysis = raw_input("What kind of similarity analysis are you interested in? Type the number representing any of the following: \n 1. Find contributors similar to a given contributor. \n 2. Find recipients similar to a given recipient. \n 3. Find pairs similar to a given pair. \n Bedfellows is currently set to display a list of top " + str(RANK_THRESHOLD) + " results. If you would like to change this setting, type 4. \n Type anything else to exit. \n")
 
         # Measure cosine similarity between different contributors. Each contributor is represented by a vector of final scores of pairs it belongs to.
         if analysis == "1":
@@ -706,7 +706,7 @@ def similarity_analysis(db, cursor):
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(db, e)
-            print "Top " + RANK_THRESHOLD + " contributors most similar to " + fec_committee_id + " " + contributor_name + " along with cosine similarity scores are:"
+            print "Top " + str(RANK_THRESHOLD) + " contributors most similar to " + fec_committee_id + " " + contributor_name + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != fec_committee_id:
@@ -716,7 +716,7 @@ def similarity_analysis(db, cursor):
                     except MySQLdb.Error, e:
                         handle_error(db, e)
                     print w, contributor_name, cosine_sim[w]
-                if index > RANK_THRESHOLD:
+                if index >= RANK_THRESHOLD:
                     break
 
         # Measure cosine similarity between different recipients. Each recipient is represented by a vector of final scores of pairs it belongs to.
@@ -732,7 +732,7 @@ def similarity_analysis(db, cursor):
                 recipient_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(db, e)
-            print "Top " + RANK_THRESHOLD + " recipients most similar to " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
+            print "Top " + str(RANK_THRESHOLD) + " recipients most similar to " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != other_id:
@@ -742,7 +742,7 @@ def similarity_analysis(db, cursor):
                     except MySQLdb.Error, e:
                        handle_error(db, e)
                     print w, recipient_name, cosine_sim[w]
-                if index > RANK_THRESHOLD:
+                if index >= RANK_THRESHOLD:
                     break
 
         elif analysis == "3":
@@ -763,15 +763,13 @@ def similarity_analysis(db, cursor):
 
             try:
                 key = (fec_committee_id,other_id)
+                cosine_sim = {}
+                for p in pair_score_map:
+                    cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p])) #cosine similarity as distance metric
             except:
-                sys.stderr.write(str(e))
-                sys.exit(1)
+                print "Bedfellows couldn't find contributor-recipient pair entered as input in the database."
 
-            cosine_sim = {}
-            for p in pair_score_map:
-                cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p])) #cosine similarity as distance metric
-
-            print "Top " + RANK_THRESHOLD + " contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
+            print "Top " + str(RANK_THRESHOLD) + " contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != key:
@@ -786,17 +784,18 @@ def similarity_analysis(db, cursor):
                     except MySQLdb.Error, e:
                         handle_error(db, e)
                     print w[0], contributor_name, w[1], recipient_name, cosine_sim[w]
-                if index > RANK_THRESHOLD:
+                if index >= RANK_THRESHOLD:
                     break
 
         elif analysis == "4":
-            while True: 
-                RANK_THRESHOLD = raw_input("How many results would you like to display? Enter an integer number. \n")
-                if type(RANK_THRESHOLD) == int
+            while True:
+                try: 
+                    RANK_THRESHOLD = int(raw_input("How many results would you like to display? Enter an integer number. \n"))
                     break
-                else 
-                    RANK_THRESHOLD = raw_input("Invalid input. Please try again. \n How many results would you like to display? Enter an integer number. \n")
+                except:
+                    print "Invalid input. Please try again."
 
+        # This hidden option is used to measure internal consistency of scores through Cronbach's Alpha. Still in development.
         elif analysis == "5":
             # Then, finds final scores by computing the weighted average of the five scores computed above: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores, length_scores.
             # We start by joining the first four score tables: exclusivity_scores, report_type_scores, periodicity_scores, maxed_out_scores. We handle race_focus_score separately because this table assigns scores to contributors, rather than contributor/recipient pairs as the others.
