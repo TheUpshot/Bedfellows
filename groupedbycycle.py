@@ -704,10 +704,10 @@ def similarity_analysis(db, cursor):
     while (True):
         # Ask user to input kind of similarity analysis to be performed.
         # Options: 1. Find contributors similar to a given contributor, 2. Find recipients similar to a given recipient, 3. Find pairs similar to a given pair.
-        analysis = raw_input("What kind of similarity analysis are you interested in? \n 1. To find contributors similar to a given contributor, type 'contributor'. \n 2. To find recipients similar to a given recipient, type 'recipient'. \n 3. To find pairs similar to a given pair, enter 'pairs'. \n 4. Type 'exit' to exit. \n")
+        analysis = raw_input("What kind of similarity analysis are you interested in? Type the number representing any of the following: \n 1. Find contributors similar to a given contributor. \n 2. Find recipients similar to a given recipient. \n 3. Find pairs similar to a given pair. \n Bedfellows is currently set to display a list of top " + RANK_THRESHOLD + " results. If you would like to change this setting, type 4. \n Type anything else to exit. \n")
 
         # Measure cosine similarity between different contributors. Each contributor is represented by a vector of final scores of pairs it belongs to.
-        if analysis == "contributor":
+        if analysis == "1":
             fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
 
             cosine_sim = {}
@@ -720,7 +720,7 @@ def similarity_analysis(db, cursor):
             except MySQLdb.Error, e:
                 handle_error(db, e)
 
-            print "Top 10 contributors most similar to " + fec_committee_id + " " + contributor_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
+            print "Top " + RANK_THRESHOLD + " contributors most similar to " + fec_committee_id + " " + contributor_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != fec_committee_id:
@@ -734,7 +734,7 @@ def similarity_analysis(db, cursor):
                     break
 
         # Measure cosine similarity between different recipients. Each recipient is represented by a vector of final scores of pairs it belongs to.
-        elif analysis == "recipient":
+        elif analysis == "2":
             other_id = raw_input("Enter recipient's other_id: \n")
 
             cosine_sim = {}
@@ -746,7 +746,7 @@ def similarity_analysis(db, cursor):
                 recipient_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(db, e)
-            print "Top 10 recipients most similar to " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
+            print "Top " + RANK_THRESHOLD + " recipients most similar to " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != other_id:
@@ -759,7 +759,7 @@ def similarity_analysis(db, cursor):
                 if index > RANK_THRESHOLD:
                     break
 
-        elif analysis == "pairs":
+        elif analysis == "3":
             # In this case, pairs will be represented by a vector made up of the six scores used in the computational of final score.
             # Other ideas: nearest-neighbor search/clustering.
             fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
@@ -786,7 +786,7 @@ def similarity_analysis(db, cursor):
             for p in pair_score_map:
                 cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p])) #cosine similarity as distance metric
 
-            print "Top 10 contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
+            print "Top " + RANK_THRESHOLD + " contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " in election cycle " + cycle + " along with cosine similarity scores are:"
 
             for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
                 if w != key:
@@ -804,11 +804,15 @@ def similarity_analysis(db, cursor):
                 if index > RANK_THRESHOLD:
                     break
 
-        elif analysis == "exit":
-            sys.exit(1)
+        elif analysis == "4":
+            while True: 
+                RANK_THRESHOLD = raw_input("How many results would you like to display? Enter an integer number. \n")
+                if type(RANK_THRESHOLD) == int
+                    break
+                else 
+                    RANK_THRESHOLD = raw_input("Invalid input. Please try again. \n How many results would you like to display? Enter an integer number. \n")
 
         else:
-            print "Invalid option."
             break
 
 
