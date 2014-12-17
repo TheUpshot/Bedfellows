@@ -1,3 +1,4 @@
+import re
 import sys, csv
 import MySQLdb
 
@@ -17,6 +18,15 @@ def handle_error(db, e):
         db.rollback()
         sys.stderr.write(str(e))
         sys.exit(1)
+
+def check_id(id):
+    regexp = re.compile("C\d+")
+    match = regexp.match(id)
+    try:
+        match.group()
+    except:
+        raise ValueError("Invalid committee id")
+
 
 def usage():
     sys.stderr.write("""
