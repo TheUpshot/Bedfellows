@@ -4,7 +4,7 @@ from pandas import *
 import MySQLdb
 import numpy as np
 
-from main import commit_changes, handle_error
+from main import commit_changes, handle_error, check_id
 
 INFINITY = 9999999999999
 
@@ -696,6 +696,11 @@ def similarity_analysis(db, cursor):
         # Measure cosine similarity between different contributors. Each contributor is represented by a vector of final scores of pairs it belongs to.
         if analysis == "1":
             fec_committee_id = raw_input("Enter contributor committee's id: \n")
+            try:
+                check_id(fec_committee_id)
+            except:
+                print "Invalid committee id, try again."
+                fec_committee_id = raw_input("Enter contributor committee's id: \n")
 
             cosine_sim = {}
             for j in range(1,adj_matrix.shape[0]):
@@ -722,13 +727,17 @@ def similarity_analysis(db, cursor):
         # Measure cosine similarity between different recipients. Each recipient is represented by a vector of final scores of pairs it belongs to.
         elif analysis == "2":
             other_id = raw_input("Enter recipient committee's id: \n")
-
-            cosine_sim = {}
-            for j in range(1,adj_matrix_T.shape[0]):
-                cosine_sim[adj_matrix_T.ix[j].name] = np.dot(adj_matrix_T.ix[other_id],adj_matrix_T.ix[j])/(np.linalg.norm(adj_matrix_T.ix[other_id])*np.linalg.norm(adj_matrix_T.ix[j])) #cosine similarity as distance metric
-
-            cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
             try:
+                check_id(fec_committee_id)
+            except:
+                print "Invalid committee id, try again."
+                fec_committee_id = raw_input("Enter recipient committee's id: \n")
+            try:
+                cosine_sim = {}
+                for j in range(1,adj_matrix_T.shape[0]):
+                    cosine_sim[adj_matrix_T.ix[j].name] = np.dot(adj_matrix_T.ix[other_id],adj_matrix_T.ix[j])/(np.linalg.norm(adj_matrix_T.ix[other_id])*np.linalg.norm(adj_matrix_T.ix[j])) #cosine similarity as distance metric
+
+                cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
                 recipient_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(db, e)
@@ -748,13 +757,24 @@ def similarity_analysis(db, cursor):
         elif analysis == "3":
             # In this case, pairs will be represented by a vector made up of the six scores used in the computational of final score.
             fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
+            try:
+                check_id(fec_committee_id)
+            except:
+                print "Invalid committee id, try again."
+                fec_committee_id = raw_input("Enter contributor's committee's id: \n")
+
             cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
             try:
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(db, e)
 
-            other_id = raw_input("Enter recipient's other_id: \n")
+            other_id = raw_input("Enter recipient's id: \n")
+            try:
+                check_id(fec_committee_id)
+            except:
+                print "Invalid committee id, try again."
+                fec_committee_id = raw_input("Enter recipient's committee's id: \n")
             cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
             try:
                 recipient_name = cursor.fetchone()[0]
@@ -766,30 +786,30 @@ def similarity_analysis(db, cursor):
                 cosine_sim = {}
                 for p in pair_score_map:
                     cosine_sim[p] = np.dot(pair_score_map[key],pair_score_map[p])/(np.linalg.norm(pair_score_map[key])*np.linalg.norm(pair_score_map[p])) #cosine similarity as distance metric
+
+                print "Top " + str(RANK_THRESHOLD) + " contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
+
+                for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
+                    if w != key:
+                        cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w[0] + "';")
+                        try:
+                            contributor_name = cursor.fetchone()[0]
+                        except MySQLdb.Error, e:
+                            handle_error(db, e)
+                        cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w[1] + "';")
+                        try:
+                            recipient_name = cursor.fetchone()[0]
+                        except MySQLdb.Error, e:
+                            handle_error(db, e)
+                        print w[0], contributor_name, w[1], recipient_name, cosine_sim[w]
+                    if index >= RANK_THRESHOLD:
+                        break
             except:
-                print "Bedfellows couldn't find contributor-recipient pair entered as input in the database."
-
-            print "Top " + str(RANK_THRESHOLD) + " contributor-recipient pairs most similar to pair " + fec_committee_id + " " + contributor_name + " and " + other_id + " " + recipient_name + " along with cosine similarity scores are:"
-
-            for index, w in enumerate(sorted(cosine_sim, key=cosine_sim.get, reverse=True)):
-                if w != key:
-                    cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + w[0] + "';")
-                    try:
-                        contributor_name = cursor.fetchone()[0]
-                    except MySQLdb.Error, e:
-                        handle_error(db, e)
-                    cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + w[1] + "';")
-                    try:
-                        recipient_name = cursor.fetchone()[0]
-                    except MySQLdb.Error, e:
-                        handle_error(db, e)
-                    print w[0], contributor_name, w[1], recipient_name, cosine_sim[w]
-                if index >= RANK_THRESHOLD:
-                    break
+                print "Bedfellows couldn't find contributor-recipient pair entered as input in the database.\n"
 
         elif analysis == "4":
             while True:
-                try: 
+                try:
                     RANK_THRESHOLD = int(raw_input("How many results would you like to display? Enter an integer number. \n"))
                     break
                 except:
