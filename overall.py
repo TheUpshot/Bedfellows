@@ -728,10 +728,10 @@ def similarity_analysis(db, cursor):
         elif analysis == "2":
             other_id = raw_input("Enter recipient committee's id: \n")
             try:
-                check_id(fec_committee_id)
+                check_id(other_id)
             except:
                 print "Invalid committee id, try again."
-                fec_committee_id = raw_input("Enter recipient committee's id: \n")
+                other_id = raw_input("Enter recipient committee's id: \n")
             try:
                 cosine_sim = {}
                 for j in range(1,adj_matrix_T.shape[0]):
@@ -771,10 +771,10 @@ def similarity_analysis(db, cursor):
 
             other_id = raw_input("Enter recipient's id: \n")
             try:
-                check_id(fec_committee_id)
+                check_id(other_id)
             except:
                 print "Invalid committee id, try again."
-                fec_committee_id = raw_input("Enter recipient's committee's id: \n")
+                other_id = raw_input("Enter recipient's committee's id: \n")
             cursor.execute("SELECT recipient_name FROM fec_contributions WHERE other_id = '" + other_id + "';")
             try:
                 recipient_name = cursor.fetchone()[0]
