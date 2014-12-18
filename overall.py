@@ -33,12 +33,16 @@ def main(db):
 
 def initial_setup(db, cursor):
     # Reads into database table with ID's of super PACs to be excluded from this analysis.
+    csv_data = csv.reader(file('superPACs.csv', 'rU'))
     sql = []
-    sql.append("DROP TABLE IF EXISTS super_PACs_list;")
-    sql.append(""" CREATE TABLE super_PACs_list (
-                fecid CHAR(9) NOT NULL);""")
+    cursor.execute("DROP TABLE IF EXISTS super_PACs_list;")
+    cursor.execute("""CREATE TABLE super_PACs_list (
+                num CHAR(9) NOT NULL,
+                fecid CHAR(11) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                filer VARCHAR(255) NOT NULL);""")
     sql.append("LOCK TABLES super_PACs_list WRITE, fec_committees AS T READ;")
-    sql.append("INSERT INTO super_PACs_list (fecid) SELECT T.fecid FROM fec_committees T WHERE T.is_super_PAC = '1';")
+    cursor.execute("LOAD DATA LOCAL INFILE 'superPACs.csv' into TABLE super_PACs_list fields terminated by ',' OPTIONALLY ENCLOSED BY '\"' lines terminated by '\r';")
     sql.append("UNLOCK TABLES;")
     sql.append("ALTER TABLE super_PACs_list ADD INDEX fecid (fecid);")
     commit_changes(db, cursor, sql)
