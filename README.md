@@ -35,7 +35,7 @@ Note that it is required that a database containing tables fec_committee_contrib
 
 The `main.py` file simply calls `overall.py` or `groupedbycycle.py` as specified by the second paramater (which must be either `overall` or `cycle`).
 
-Choosing `overall` will give you the option of computing scores, analyzing existing scores, or both:
+Choosing `overall` will give you the option of computing scores, analyzing existing scores, or both for all cycles, while choosing `cycle` will do the same, prompting for a specific even-numbered cycle:
 
 ```
     Do you want to compute scores or perform a similarity analysis of scores already computed? Enter 'compute', 'analyze' or 'both' accordingly.
