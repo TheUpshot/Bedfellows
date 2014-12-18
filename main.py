@@ -19,7 +19,7 @@ def handle_error(db, e):
         sys.stderr.write(str(e))
         sys.exit(1)
 
-def check_id(id):
+def check_contributor_id(id):
     regexp = re.compile("C\d+")
     match = regexp.match(id)
     try:
@@ -27,6 +27,13 @@ def check_id(id):
     except:
         raise ValueError("Invalid committee id")
 
+def check_recipient_id(id):
+    regexp = re.compile("[C|H|P|S|V]\d+")
+    match = regexp.match(id)
+    try:
+        match.group()
+    except:
+        raise ValueError("Invalid committee id")
 
 def usage():
     sys.stderr.write("""

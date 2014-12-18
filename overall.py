@@ -4,7 +4,7 @@ from pandas import *
 import MySQLdb
 import numpy as np
 
-from main import commit_changes, handle_error, check_id
+from main import commit_changes, handle_error, check_contributor_id, check_recipient_id
 
 INFINITY = 9999999999999
 
@@ -701,17 +701,16 @@ def similarity_analysis(db, cursor):
         if analysis == "1":
             fec_committee_id = raw_input("Enter contributor committee's id: \n")
             try:
-                check_id(fec_committee_id)
+                check_contributor_id(fec_committee_id)
             except:
                 print "Invalid committee id, try again."
                 fec_committee_id = raw_input("Enter contributor committee's id: \n")
+            try: 
+                cosine_sim = {}
+                for j in range(1,adj_matrix.shape[0]):
+                    cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j])) #cosine similarity as distance metric
 
-            cosine_sim = {}
-            for j in range(1,adj_matrix.shape[0]):
-                cosine_sim[adj_matrix.ix[j].name] = np.dot(adj_matrix.ix[fec_committee_id],adj_matrix.ix[j])/(np.linalg.norm(adj_matrix.ix[fec_committee_id])*np.linalg.norm(adj_matrix.ix[j])) #cosine similarity as distance metric
-
-            cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
-            try:
+                cursor.execute("SELECT contributor_name FROM fec_contributions WHERE fec_committee_id = '" + fec_committee_id + "';")
                 contributor_name = cursor.fetchone()[0]
             except MySQLdb.Error, e:
                 handle_error(db, e)
@@ -732,7 +731,7 @@ def similarity_analysis(db, cursor):
         elif analysis == "2":
             other_id = raw_input("Enter recipient committee's id: \n")
             try:
-                check_id(other_id)
+                check_recipient_id(other_id)
             except:
                 print "Invalid committee id, try again."
                 other_id = raw_input("Enter recipient committee's id: \n")
@@ -762,7 +761,7 @@ def similarity_analysis(db, cursor):
             # In this case, pairs will be represented by a vector made up of the six scores used in the computational of final score.
             fec_committee_id = raw_input("Enter contributor's fec_committee_id: \n")
             try:
-                check_id(fec_committee_id)
+                check_contributor_id(fec_committee_id)
             except:
                 print "Invalid committee id, try again."
                 fec_committee_id = raw_input("Enter contributor's committee's id: \n")
@@ -775,7 +774,7 @@ def similarity_analysis(db, cursor):
 
             other_id = raw_input("Enter recipient's id: \n")
             try:
-                check_id(other_id)
+                check_recipient_id(other_id)
             except:
                 print "Invalid committee id, try again."
                 other_id = raw_input("Enter recipient's committee's id: \n")
@@ -836,11 +835,9 @@ def similarity_analysis(db, cursor):
                         periodicity_score FLOAT(20),
                         maxed_out_score FLOAT(20),
                         length_score FLOAT(20),
-                        five_sum FLOAT(20),
-                        three_sum FLOAT(20),
-                        two_sum FLOAT(20));""")
+                        five_sum FLOAT(20);""")
             sql.append("LOCK TABLES five_sum WRITE, exclusivity_scores AS T1 READ, report_type_scores AS T2 READ, periodicity_scores AS T3 READ, maxed_out_scores AS T4 READ, length_scores AS T5 READ, score_weights AS T6 READ, score_weights AS T7 READ, score_weights AS T8 READ, score_weights AS T9 READ, score_weights as T10 READ;")
-            sql.append("INSERT INTO five_sum (fec_committee_id, contributor_name, other_id, recipient_name, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, five_sum, three_sum, two_sum) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(T1.exclusivity_score, 0) AS exclusivity_score, IFNULL(T2.report_type_score, 0) AS report_type_score, IFNULL(T3.periodicity_score, 0) AS periodicity_score, IFNULL(T4.maxed_out_score, 0) AS maxed_out_score, IFNULL(T5.length_score, 0) AS length_score, IFNULL(T1.exclusivity_score, 0) + IFNULL(T2.report_type_score, 0) + IFNULL(T3.periodicity_score, 0) + IFNULL(T4.maxed_out_score, 0) + IFNULL(T5.length_score, 0) AS five_sum, IFNULL(T1.exclusivity_score, 0) + IFNULL(T3.periodicity_score, 0) + IFNULL(T4.maxed_out_score, 0) AS three_sum, IFNULL(T5.length_score, 0) + IFNULL(T2.report_type_score, 0) AS two_sum FROM exclusivity_scores T1 LEFT OUTER JOIN report_type_scores T2 ON T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id LEFT OUTER JOIN periodicity_scores T3 ON T1.fec_committee_id = T3.fec_committee_id AND T1.other_id = T3.other_id LEFT OUTER JOIN maxed_out_scores T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id LEFT OUTER JOIN length_scores T5 ON T1.fec_committee_id = T5.fec_committee_id AND T1.other_id = T5.other_id;")
+            sql.append("INSERT INTO five_sum (fec_committee_id, contributor_name, other_id, recipient_name, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, five_sum) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, IFNULL(T1.exclusivity_score, 0) AS exclusivity_score, IFNULL(T2.report_type_score, 0) AS report_type_score, IFNULL(T3.periodicity_score, 0) AS periodicity_score, IFNULL(T4.maxed_out_score, 0) AS maxed_out_score, IFNULL(T5.length_score, 0) AS length_score, IFNULL(T1.exclusivity_score, 0) + IFNULL(T2.report_type_score, 0) + IFNULL(T3.periodicity_score, 0) + IFNULL(T4.maxed_out_score, 0) + IFNULL(T5.length_score, 0) AS five_sum FROM exclusivity_scores T1 LEFT OUTER JOIN report_type_scores T2 ON T1.fec_committee_id = T2.fec_committee_id AND T1.other_id = T2.other_id LEFT OUTER JOIN periodicity_scores T3 ON T1.fec_committee_id = T3.fec_committee_id AND T1.other_id = T3.other_id LEFT OUTER JOIN maxed_out_scores T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id LEFT OUTER JOIN length_scores T5 ON T1.fec_committee_id = T5.fec_committee_id AND T1.other_id = T5.other_id;")
             sql.append("UNLOCK TABLES;")
             sql.append("ALTER TABLE five_sum ADD INDEX (fec_committee_id, contributor_name, other_id, recipient_name, five_sum);")
             commit_changes(db, cursor, sql)
@@ -861,18 +858,14 @@ def similarity_analysis(db, cursor):
                         maxed_out_score FLOAT(20),
                         length_score FLOAT(20),
                         race_focus_score FLOAT(20),
-                        final_sum FLOAT(20),
-                        four_sum FLOAT(20),
-                        two_sum FLOAT(20));""")
+                        final_sum FLOAT(20);""")
             sql.append("LOCK TABLES final_sum WRITE, five_sum AS T1 READ, race_focus_scores AS T2 READ, score_weights AS T3 READ, pairs_count AS T4 READ;")
-            sql.append("INSERT INTO final_sum (fec_committee_id, contributor_name, other_id, recipient_name, count, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, race_focus_score, final_sum, four_sum, two_sum) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T4.count, T1.exclusivity_score, T1.report_type_score, T1.periodicity_score, T1.maxed_out_score, T1.length_score, IFNULL(T2.race_focus_score, 0) AS race_focus_score, T1.five_sum + IFNULL(T2.race_focus_score, 0) AS final_sum, T1.three_sum + IFNULL(T2.race_focus_score, 0) AS four_sum, T1.two_sum FROM five_sum T1 LEFT OUTER JOIN race_focus_scores T2 ON T1.fec_committee_id = T2.fec_committee_id LEFT OUTER JOIN pairs_count T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id;")
+            sql.append("INSERT INTO final_sum (fec_committee_id, contributor_name, other_id, recipient_name, count, exclusivity_score, report_type_score, periodicity_score, maxed_out_score, length_score, race_focus_score, final_sum) SELECT T1.fec_committee_id, T1.contributor_name, T1.other_id, T1.recipient_name, T4.count, T1.exclusivity_score, T1.report_type_score, T1.periodicity_score, T1.maxed_out_score, T1.length_score, IFNULL(T2.race_focus_score, 0) AS race_focus_score, T1.five_sum + IFNULL(T2.race_focus_score, 0) AS final_sum FROM five_sum T1 LEFT OUTER JOIN race_focus_scores T2 ON T1.fec_committee_id = T2.fec_committee_id LEFT OUTER JOIN pairs_count T4 ON T1.fec_committee_id = T4.fec_committee_id AND T1.other_id = T4.other_id;")
             sql.append("UNLOCK TABLES;")
             sql.append("ALTER TABLE final_sum ADD INDEX (fec_committee_id, other_id);")
             commit_changes(db, cursor, sql)
             print "Table final_sum"
 
-            #cursor.execute("SELECT VAR_POP(exclusivity_score), VAR_POP(report_type_score), VAR_POP(periodicity_score), VAR_POP(maxed_out_score), VAR_POP(length_score), VAR_POP(race_focus_score), VAR_POP(final_score) FROM final_scores;")
-            #cursor.execute("SELECT VAR_SAMP(exclusivity_score), VAR_SAMP(report_type_score), VAR_SAMP(periodicity_score), VAR_SAMP(maxed_out_score), VAR_SAMP(length_score), VAR_SAMP(race_focus_score), VAR_SAMP(final_sum), VAR_SAMP(four_sum) FROM final_sum;")
             cursor.execute("SELECT VAR_POP(exclusivity_score), VAR_POP(report_type_score), VAR_POP(periodicity_score), VAR_POP(maxed_out_score), VAR_POP(length_score), VAR_POP(race_focus_score), VAR_POP(final_sum), VAR_POP(four_sum), VAR_POP(two_sum) FROM final_sum;")
             try:
                variances = cursor.fetchone()
@@ -892,36 +885,16 @@ def similarity_analysis(db, cursor):
             var_race_focus = variances[5]
             print "var_race_focus = " + str(var_race_focus)
             var_final = variances[6]
-            var_four = variances[7]
-            var_two = variances[8]
-            #scaled_var_final = 36.0 * var_final
             print "var_final = " + str(var_final)
-            #print "scaled_var_final = " + str(scaled_var_final)
-            print "var_four = " + str(var_four)
-            print "var_two = " + str(var_two)
 
             K = 6.0   #number of scores computed
             sum_of_6_score_vars = var_exclusivity + var_report_type + var_periodicity + var_maxed_out + var_length + var_race_focus
-            sum_of_4_score_vars = var_exclusivity + var_periodicity + var_maxed_out + var_race_focus
-            sum_of_2_score_vars = var_length + var_report_type
-            print "sum of 6 score variances: var_exclusivity + var_report_type + var_periodicity + var_maxed_out + var_length + var_race_focus"
+            print "sum of 6 variances: var_exclusivity + var_report_type + var_periodicity + var_maxed_out + var_length + var_race_focus"
             print sum_of_6_score_vars
-            print "sum of 4 score variances: var_exclusivity + var_periodicity + var_maxed_out + var_race_focus"
-            print sum_of_4_score_vars
-            print "sum of 2 score variances: var_length + var_report_type"
-            print sum_of_2_score_vars
-            #cronbach_alpha = (K/(K-1))*(1.0-((sum_of_scores)/scaled_var_final))
-            cronbach_alpha_1 = (K/(K-1.0))*(1.0-((sum_of_6_score_vars)/var_final))
-            print "cronbach's alpha 1: "
-            print cronbach_alpha_1
-            K = 4.0
-            cronbach_alpha_2 = (K/(K-1.0))*(1.0-((sum_of_4_score_vars)/var_four))
-            print "cronbach's alpha 2: "
-            print cronbach_alpha_2
-            K = 2.0
-            cronbach_alpha_3 = (K/(K-1.0))*(1.0-((sum_of_2_score_vars)/var_two))
-            print "cronbach's alpha 3: "
-            print cronbach_alpha_3
+
+            cronbach_alpha = (K/(K-1.0))*(1.0-((sum_of_6_score_vars)/var_final))
+            print "cronbach's alpha: "
+            print cronbach_alpha
 
         else:
             break
